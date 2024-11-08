@@ -1,5 +1,5 @@
 let voltageChart = null;  // Declare chart globally so it can be destroyed later
-let capacitorHealthChart = null;
+let rulChart = null;  // Declare a global variable for the RUL (health) chart
 let allDevices = [];  // Store the list of all devices for filtering
 
 // Function to load all devices from the server
@@ -15,10 +15,6 @@ function loadDevices() {
 
 // Function to fetch and display graphs for the selected device
 function showGraphsForDevice(device) {
-    // Update the titles to show the current device
-    //document.getElementById('voltage-title').innerText = `Voltage data for ${device}`;
-    //document.getElementById('capacitor-title').innerText = `Capacitor Health data for ${device}`;
-
     // Fetch voltage data for the selected device
     fetch(`/data/${device}/voltageData.txt`)
         .then(response => {
@@ -32,18 +28,18 @@ function showGraphsForDevice(device) {
         })
         .catch(error => console.error('Error loading voltage data:', error));
 
-    // Fetch capacitor health data for the selected device
-    fetch(`/data/${device}/capacitorHealthData.txt`)
+    // Fetch RUL (health) data for the selected device (assuming the file is named `rulData.csv`)
+    fetch(`/data/${device}/rulData.csv`)
         .then(response => {
             if (!response.ok) {
-                throw new Error('Capacitor Health data not found');
+                throw new Error('RUL data not found');
             }
             return response.text();
         })
         .then(data => {
-            updateCapacitorHealthChart(data);  // Process capacitor health data and update chart
+            updateRulChart(data);  // Process RUL data and update chart
         })
-        .catch(error => console.error('Error loading capacitor health data:', error));
+        .catch(error => console.error('Error loading RUL data:', error));
 }
 
 // Update the voltage chart with the fetched data
@@ -70,26 +66,43 @@ function updateVoltageChart(data) {
     });
 }
 
-// Update the capacitor health chart with the fetched data
-function updateCapacitorHealthChart(data) {
-    const ctx = document.getElementById('capacitorHealthChart').getContext('2d');
-    const capacitorData = parseData(data);  // Parse the data into labels and values
+// Update the RUL chart with the fetched data
+function updateRulChart(data) {
+    const ctx = document.getElementById('rulChart').getContext('2d');
+    const rulData = parseData(data);  // Parse the data into labels and values
 
     // Destroy the old chart instance before creating a new one
-    if (capacitorHealthChart) {
-        capacitorHealthChart.destroy();
+    if (rulChart) {
+        rulChart.destroy();
     }
 
-    capacitorHealthChart = new Chart(ctx, {
+    rulChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: capacitorData.labels,
+            labels: rulData.labels,
             datasets: [{
-                label: 'Capacitor Health vs Time',
-                data: capacitorData.values,
+                label: 'Remaining Useful Life (RUL)',
+                data: rulData.values,
                 borderColor: 'rgb(255, 99, 132)',
-                tension: 0.1
+                tension: 0.1,
+                fill: false
             }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (seconds)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'RUL'
+                    }
+                }
+            }
         }
     });
 }
