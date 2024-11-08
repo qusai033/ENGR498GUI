@@ -5,7 +5,7 @@ import os
 app = Flask(__name__)
 
 # Path to the directory containing device folders
-DATA_DIRECTORY = './data'
+DATA_DIRECTORY = '../data'  # Relative path to the data folder
 
 @app.route('/')
 def index():
