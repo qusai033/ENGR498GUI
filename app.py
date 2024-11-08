@@ -1,39 +1,36 @@
+from flask import Flask, jsonify, send_from_directory, request, abort
+import pandas as pd
 import os
-from flask import Flask, render_template, send_from_directory, jsonify, abort
 
 app = Flask(__name__)
 
-# Path to the directory containing device folders
-BASE_DEVICE_DIRECTORY = './data'  # Relative to your project directory on Replit
-
+# Path to the directory containing CSV files
+DATA_DIRECTORY = './data'
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return send_from_directory('templates', 'index.html')
 
-
-@app.route('/data/<device>/<filename>', methods=['GET'])
-def get_data_file(device, filename):
-    device_folder_path = os.path.join(BASE_DEVICE_DIRECTORY, device)
-
-    # Ensure the device folder exists
-    if not os.path.exists(device_folder_path):
-        return abort(404, description="Device not found")
-
-    # Ensure the file exists in the device folder
-    if not os.path.exists(os.path.join(device_folder_path, filename)):
-        return abort(404, description="File not found")
-
-    # Serve the file from the device folder
-    return send_from_directory(device_folder_path, filename)
-
-
-@app.route('/list_devices', methods=['GET'])
-def list_devices():
-    # List all directories (devices) within the BASE_DEVICE_DIRECTORY
-    devices = [f.name for f in os.scandir(BASE_DEVICE_DIRECTORY) if f.is_dir()]
-    return jsonify(devices)
-
+@app.route('/get_health_data', methods=['GET'])
+def get_health_data():
+    # Specify the CSV file you want to read from the folder
+    csv_file = os.path.join(DATA_DIRECTORY, 'health_data.csv')
+    
+    # Check if the file exists
+    if not os.path.exists(csv_file):
+        return abort(404, description="CSV file not found.")
+    
+    # Load the CSV data into a pandas DataFrame
+    df = pd.read_csv(csv_file)
+    
+    # Convert the DataFrame to a dictionary suitable for JSON
+    data = {
+        "timestamps": df['Timestamp'].tolist(),
+        "health_metric_1": df['HealthMetric1'].tolist(),
+        "health_metric_2": df['HealthMetric2'].tolist()
+    }
+    
+    return jsonify(data)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', debug=True)
+    app.run(debug=True)
