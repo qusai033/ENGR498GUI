@@ -13,7 +13,6 @@ function loadDevices() {
         .catch(error => console.error('Error loading devices:', error));
 }
 
-// Function to fetch and display graphs for the selected device
 function showGraphsForDevice(device) {
     // Fetch voltage data for the selected device
     fetch(`/data/${device}/voltageData.txt`)
@@ -28,19 +27,60 @@ function showGraphsForDevice(device) {
         })
         .catch(error => console.error('Error loading voltage data:', error));
 
-    // Fetch RUL (health) data for the selected device (assuming the file is named `rulData.csv`)
+    // Fetch RUL (health) data for the selected device (in JSON format)
     fetch(`/data/${device}/rulData.csv`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('RUL data not found');
             }
-            return response.text();
+            return response.json();  // Parse JSON directly
         })
         .then(data => {
-            updateRulChart(data);  // Process RUL data and update chart
+            updateRulChart(data);  // Update the RUL chart directly with JSON data
         })
         .catch(error => console.error('Error loading RUL data:', error));
 }
+
+// Update the RUL chart with JSON data (no need to parse with parseData)
+function updateRulChart(data) {
+    const ctx = document.getElementById('rulChart').getContext('2d');
+
+    // Destroy the old chart instance before creating a new one
+    if (rulChart) {
+        rulChart.destroy();
+    }
+
+    rulChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time,  // Use time directly from JSON response
+            datasets: [{
+                label: 'Remaining Useful Life (RUL)',
+                data: data.rul,  // Use RUL values directly from JSON response
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Time (seconds)'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'RUL'
+                    }
+                }
+            }
+        }
+    });
+}
+
 
 // Update the voltage chart with the fetched data
 function updateVoltageChart(data) {
@@ -66,46 +106,6 @@ function updateVoltageChart(data) {
     });
 }
 
-// Update the RUL chart with the fetched data
-function updateRulChart(data) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
-    const rulData = parseData(data);  // Parse the data into labels and values
-
-    // Destroy the old chart instance before creating a new one
-    if (rulChart) {
-        rulChart.destroy();
-    }
-
-    rulChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: rulData.labels,
-            datasets: [{
-                label: 'Remaining Useful Life (RUL)',
-                data: rulData.values,
-                borderColor: 'rgb(255, 99, 132)',
-                tension: 0.1,
-                fill: false
-            }]
-        },
-        options: {
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Time (seconds)'
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: 'RUL'
-                    }
-                }
-            }
-        }
-    });
-}
 
 // Utility function to parse text data into a format usable by the chart
 function parseData(data) {
@@ -123,6 +123,7 @@ function parseData(data) {
 
     return { labels, values };
 }
+
 
 // Function to display the filtered devices in the dropdown
 function displayDevices(devices) {
