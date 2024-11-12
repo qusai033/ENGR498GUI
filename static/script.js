@@ -2,6 +2,15 @@ let voltageChart = null;  // Declare chart globally so it can be destroyed later
 let rulChart = null;  // Declare a global variable for the RUL (health) chart
 let allDevices = [];  // Store the list of all devices for filtering
 
+
+function resetZoom() {
+    if (voltageChart) {
+        voltageChart.resetZoom();
+    }
+    if (rulChart) {
+        rulChart.resetZoom();
+    }
+}
 // Function to load all devices from the server
 function loadDevices() {
     fetch('/list_devices')
@@ -15,12 +24,12 @@ function loadDevices() {
 
 function showGraphsForDevice(device) {
     // Fetch voltage data for the selected device
-    fetch(`/data/${device}/voltageData.txt`)
+    fetch(`/data/${device}/voltageData.csv`)
         .then(response => {
             if (!response.ok) {
                 throw new Error('Voltage data not found');
             }
-            return response.text();
+            return response.json();
         })
         .then(data => {
             updateVoltageChart(data);  // Process voltage data and update chart
@@ -67,13 +76,31 @@ function updateRulChart(data) {
                 x: {
                     title: {
                         display: true,
-                        text: 'Time (seconds)'
+                        text: 'Time [AU]'
                     }
                 },
                 y: {
                     title: {
                         display: true,
-                        text: 'RUL'
+                        text: 'RUL [AU]'
+                    }
+                }
+            },
+            plugins: {
+                zoom: {
+                    zoom: {
+                        wheel: {
+                            enabled: true
+                        },
+                        pinch: {
+                            enabled: true
+                        },
+                        mode: 'xy'
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'xy',
+                        threshold: 10
                     }
                 }
             }
@@ -97,11 +124,39 @@ function updateVoltageChart(data) {
         data: {
             labels: voltageData.labels,
             datasets: [{
-                label: 'Voltage vs Time',
+                label: 'Voltage Decay',
                 data: voltageData.values,
                 borderColor: 'rgb(75, 192, 192)',
                 tension: 0.1
             }]
+        },
+        options: {
+            scales: {
+                x: {
+                    title: { display: true, text: 'Time (second)'}
+                },
+                y: {
+                    title: { display: true, text: 'Voltage (V)'}
+                }
+            },
+            plugins: {
+                zoom:{
+                    zoom: {
+                        wheel: {
+                            enabled: true //enable zooming with the mouse wheel
+                        },
+                        pinch: {
+                            enabled: true // enable zooming with pinch devices
+                        },
+                        mode: 'xy' // zoom in both x and y directions
+                    },
+                    pan: {
+                        enabled: true,
+                        mode: 'xy', //allowing panning in both x, y directions
+                        threshold: 10
+                    }
+                }
+            }
         }
     });
 }
@@ -114,7 +169,7 @@ function parseData(data) {
     const values = [];
 
     lines.forEach(line => {
-        const [label, value] = line.split(',');
+        const [label, value] = line.includes(';') ? line.split(';') : line.split(',');
         if (label && value) {  // Ensure both label and value exist
             labels.push(label.trim());
             values.push(parseFloat(value.trim()));
