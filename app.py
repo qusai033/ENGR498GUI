@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, send_from_directory, request, abort
+from flask import Flask, jsonify, render_template, request, abort
 import pandas as pd
 import os
 
@@ -9,7 +9,7 @@ DATA_DIRECTORY = '../data'  # Relative path to the data folder
 
 @app.route('/')
 def index():
-    return send_from_directory('templates', 'index.html')
+    return render_template('index.html')
 
 # Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
 @app.route('/list_devices', methods=['GET'])
@@ -22,18 +22,25 @@ def list_devices():
         return jsonify({"error": str(e)}), 500
 
 # Endpoint to get voltage data for a specific device
-@app.route('/data/<device>/voltageData.txt', methods=['GET'])
+@app.route('/data/<device>/voltageData.csv', methods=['GET'])
 def get_voltage_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.txt')
+    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
     
     if not os.path.exists(file_path):
         return abort(404, description="Voltage data file not found.")
     
+    df = pd.read_csv(file_path)
+        # Check if the necessary columns exist in the CSV
+    if 'Time' not in df.columns or 'Voltage' not in df.columns:
+        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
     # Read the voltage data file as plain text
-    with open(file_path, 'r') as f:
-        data = f.read()
+    # Convert the DataFrame to a dictionary suitable for JSON
+    data = {
+        "time": df['Time'].tolist(),
+        "voltage": df['Voltage'].tolist()
+    }
     
-    return data
+    return jsonify(data)
 
 # Endpoint to get RUL (Remaining Useful Life) data for a specific device
 @app.route('/data/<device>/rulData.csv', methods=['GET'])
