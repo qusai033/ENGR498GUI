@@ -1,97 +1,35 @@
-// Define zoom options separately
-const zoomOptions = {
-  limits: {
-    x: { min: -200, max: 200, minRange: 50 },
-    y: { min: -200, max: 200, minRange: 50 }
-  },
-  pan: {
-    enabled: true,
-    mode: 'xy'
-  },
-  zoom: {
-    wheel: { enabled: true },
-    pinch: { enabled: true },
-    mode: 'xy',
-    onZoomComplete({ chart }) {
-      chart.update('none');  // Update chart to reflect zoom level
-    }
-  }
-};
+function updateGraph3Chart(data) {
+    const ctx = document.getElementById('graph3Chart').getContext('2d');
 
-function updateVoltageChart(data) {
-    const ctx = document.getElementById('voltageChart').getContext('2d');
-
-    if (voltageChart) {
-        voltageChart.destroy();
-    }
-
-    voltageChart = new Chart(ctx, {
+    const graph3Chart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.time,
+            labels: data.labels, // Replace with appropriate data
             datasets: [{
-                label: 'Voltage Decay',
-                data: data.voltage,
-                borderColor: 'rgb(75, 192, 192)',
+                label: 'Graph 3 Data',
+                data: data.values, // Replace with appropriate data
+                borderColor: 'rgb(153, 102, 255)',
                 tension: 0.1
             }]
         },
         options: {
             scales: {
-                x: { title: { display: true, text: 'Time (seconds)' } },
-                y: { title: { display: true, text: 'Voltage (V)' } }
+                x: { title: { display: true, text: 'X-Axis Label' } },
+                y: { title: { display: true, text: 'Y-Axis Label' } }
             },
             plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'xy'
+                    },
+                    zoom: {
+                        wheel: { enabled: true },
+                        pinch: { enabled: true },
+                        mode: 'xy'
+                    }
                 }
             }
         }
     });
-}
-
-function updateRulChart(data) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
-
-    if (rulChart) {
-        rulChart.destroy();
-    }
-
-    rulChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [{
-                label: 'Remaining Useful Life (RUL)',
-                data: data.rul,
-                borderColor: 'rgb(255, 99, 132)',
-                tension: 0.1,
-                fill: false
-            }]
-        },
-        options: {
-            scales: {
-                x: { title: { display: true, text: 'Time (seconds)' } },
-                y: { title: { display: true, text: 'RUL' } }
-            },
-            plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
-                }
-            }
-        }
-    });
-}
-function zoomStatus(chart) {
-    return chart.scales.x.min + ' - ' + chart.scales.x.max;
-}
-
-function panStatus() {
-    return 'Enabled';
 }
