@@ -1,75 +1,96 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Graph Layout</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.0.0-beta.10"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom.min.js"></script>
+from flask import Flask, jsonify, render_template, request, abort
+import pandas as pd
+import os
 
-</head>
-<body>
+app = Flask(__name__)
 
-    <!-- Header with Logos -->
-    <div class="header">
-        <img src="{{ url_for('static', filename='logo1.png') }}" alt="Logo 1">
-        <img src="{{ url_for('static', filename='logo2.png') }}" alt="Logo 2">
-        <img src="{{ url_for('static', filename='logo3.png') }}" alt="Logo 3">
-    </div>
+# Path to the directory containing device folders
+DATA_DIRECTORY = '../data'  # Relative path to the data folder
 
-    <!-- Nav Buttons -->
-    <div class="content">
-        <div class="sidebar">
-            <button class="nav-button" onclick="showGraphsForDevice('Device1')">Home</button>
-            
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-            <!-- Devices Dropdown -->
-            <div class="dropdown">
-                <button class="nav-button">Devices</button>
-                <div class="dropdown-content">
-                    <!-- Search box -->
-                    <input type="text" id="deviceSearch" class="search-input" placeholder="Search devices..." onkeyup="filterDevices()">
-                    <!-- List of devices -->
-                    <div class="device-list" id="searchResults"></div>
-                </div>
-            </div>
-            <button class="nav-button" onclick="resetZoom()">Reset Zoom</button>
-        </div>
+# Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
+@app.route('/list_devices', methods=['GET'])
+def list_devices():
+    try:
+        devices = [d for d in os.listdir(DATA_DIRECTORY) if os.path.isdir(os.path.join(DATA_DIRECTORY, d))]
+        return jsonify(devices)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
-        <!-- Graphs -->
-        <div class="graphs-grid">
-            <!-- Graph 1 -->
-            <div class="graph" id="voltage-graph">
-                <h2 id="voltage-title">Voltage Decay</h2>
-                <canvas id="voltageChart"></canvas>
-            </div>
-        
-            <!-- Graph 2 -->
-            <div class="graph" id="capacitor-health-graph">
-                <h2 id="capacitor-title">Remaining Useful Life (RUL)</h2>
-                <canvas id="rulChart"></canvas>
-            </div>
-        
-            <!-- Graph 3 -->
-            <div class="graph" id="state-of-Heath-graph">
-                <h2 id="graph3-title">State-of-Health</h2>
-                <canvas id="sohChart"></canvas>
-            </div>
-        
-            <!-- Graph 4 -->
-            <div class="graph" id="feature-data-graph">
-                <h2 id="graph4-title">Feature Data</h2>
-                <canvas id="fdChart"></canvas>
-            </div>
-        </div>
+# Endpoint to get voltage data for a specific device
+@app.route('/data/<device>/voltageData.csv', methods=['GET'])
+def get_voltage_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="Voltage data file not found.")
+    
+    df = pd.read_csv(file_path)
+    if 'Time' not in df.columns or 'Voltage' not in df.columns:
+        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
+    
+    data = {
+        "time": df['Time'].tolist(),
+        "voltage": df['Voltage'].tolist()
+    }
+    return jsonify(data)
 
-    <div class="footer">
-        <p>Legend: Explain data here.</p>
-    </div>
+# Endpoint to get RUL data
+@app.route('/data/<device>/rulData.csv', methods=['GET'])
+def get_rul_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="RUL data file not found.")
+    
+    df = pd.read_csv(file_path)
+    if 'DT' not in df.columns or 'RUL' not in df.columns:
+        return abort(400, description="CSV file must contain 'DT' and 'RUL' columns.")
+    
+    data = {
+        "time": df['DT'].tolist(),
+        "rul": df['RUL'].tolist()
+    }
+    return jsonify(data)
 
-    <script src="{{ url_for('static', filename='script.js') }}"></script>
-</body>
-</html>
+# Endpoint to get FD data
+@app.route('/data/<device>/fdData.csv', methods=['GET'])
+def get_fd_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="FD data file not found.")
+    
+    df = pd.read_csv(file_path)
+    if 'DT' not in df.columns or 'FD' not in df.columns:
+        return abort(400, description="CSV file must contain 'DT' and 'FD' columns.")
+    
+    data = {
+        "time": df['DT'].tolist(),
+        "fd": df['FD'].tolist()
+    }
+    return jsonify(data)
+
+# Endpoint to get SoH data
+@app.route('/data/<device>/sohData.csv', methods=['GET'])
+def get_soh_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="SoH data file not found.")
+    
+    df = pd.read_csv(file_path)
+    if 'DT' not in df.columns or 'SoH' not in df.columns:
+        return abort(400, description="CSV file must contain 'DT' and 'SoH' columns.")
+    
+    data = {
+        "time": df['DT'].tolist(),
+        "soh": df['SoH'].tolist()
+    }
+    return jsonify(data)
+
+if __name__ == "__main__":
+    app.run(debug=True)
