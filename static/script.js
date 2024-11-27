@@ -94,6 +94,9 @@ if __name__ == "__main__":
 
 
 
+
+
+
 let voltageChart = null;  // Declare chart globally so it can be destroyed later
 let rulChart = null;  // Declare a global variable for the RUL (health) chart
 let allDevices = [];  // Store the list of all devices for filtering
@@ -224,7 +227,8 @@ function updateSoHChart(data) {
                 label: 'State-of-Health (SoH)',
                 data: data.soh, // Replace with appropriate data
                 borderColor: 'rgb(153, 102, 255)',
-                tension: 0.1
+                tension: 0.1,
+                fill: false
             }]
         },
         options: {
@@ -233,16 +237,11 @@ function updateSoHChart(data) {
                 y: { title: { display: true, text: 'SoH [%]' } }
             },
             plugins: {
-                zoom: {
-                    pan: {
-                        enabled: true,
-                        mode: 'xy'
-                    },
-                    zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        mode: 'xy'
-                    }
+                zoom: zoomOptions,
+                title: {
+                    display: true,
+                    position: 'bottom',
+                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
                 }
             }
         }
@@ -262,7 +261,8 @@ function updateFDChart(data) {
                 label: 'Feature Data (FD)',
                 data: data.fd, // Replace with appropriate data
                 borderColor: 'rgb(153, 102, 255)',
-                tension: 0.1
+                tension: 0.1,
+                fill: false
             }]
         },
         options: {
@@ -271,16 +271,11 @@ function updateFDChart(data) {
                 y: { title: { display: true, text: 'FD [AU]' } }
             },
             plugins: {
-                zoom: {
-                    pan: {
-                        enabled: true,
-                        mode: 'xy'
-                    },
-                    zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        mode: 'xy'
-                    }
+                zoom: zoomOptions,
+                title: {
+                    display: true,
+                    position: 'bottom',
+                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
                 }
             }
         }
@@ -371,3 +366,107 @@ function filterDevices() {
 
 // Load devices on page load
 window.onload = loadDevices;
+
+
+
+
+
+
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Graph Layout</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.0.0-beta.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@1.2.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom.min.js"></script>
+
+</head>
+<body>
+
+    <!-- Header with Logos -->
+    <div class="header">
+        <img src="{{ url_for('static', filename='logo1.png') }}" alt="Logo 1">
+        <img src="{{ url_for('static', filename='logo2.png') }}" alt="Logo 2">
+        <img src="{{ url_for('static', filename='logo3.png') }}" alt="Logo 3">
+    </div>
+
+    <!-- Nav Buttons -->
+    <div class="content">
+        <div class="sidebar">
+            <button class="nav-button" onclick="showGraphsForDevice('Device1')">Home</button>
+            
+
+            <!-- Devices Dropdown -->
+            <div class="dropdown">
+                <button class="nav-button">Devices</button>
+                <div class="dropdown-content">
+                    <!-- Search box -->
+                    <input type="text" id="deviceSearch" class="search-input" placeholder="Search devices..." onkeyup="filterDevices()">
+                    <!-- List of devices -->
+                    <div class="device-list" id="searchResults"></div>
+                </div>
+            </div>
+            <button class="nav-button" onclick="resetZoom()">Reset Zoom</button>
+        </div>
+
+        <!-- Graphs -->
+        <div class="graphs-grid">
+            <!-- Graph 1 -->
+            <div class="graph" id="voltage-graph">
+                <h2 id="voltage-title">Voltage Decay</h2>
+                <canvas id="voltageChart"></canvas>
+            </div>
+        
+            <!-- Graph 2 -->
+            <div class="graph" id="capacitor-health-graph">
+                <h2 id="capacitor-title">Remaining Useful Life (RUL)</h2>
+                <canvas id="rulChart"></canvas>
+            </div>
+        
+            <!-- Graph 3 -->
+            <div class="graph" id="state-of-Heath-graph">
+                <h2 id="soh-title">State-of-Health</h2>
+                <canvas id="sohChart"></canvas>
+            </div>
+        
+            <!-- Graph 4 -->
+            <div class="graph" id="feature-data-graph">
+                <h2 id="fd-title">Feature Data</h2>
+                <canvas id="fdChart"></canvas>
+            </div>
+        </div>
+
+    <div class="footer">
+        <p>Legend: Explain data here.</p>
+    </div>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
