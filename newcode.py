@@ -21,15 +21,20 @@ function updateRulChart(data) {
                     fill: false,
                     pointRadius: (context) => {
                         // Highlight specific points with a larger radius
-                        if (context.dataIndex === eolIndex) return 6; // Larger for EOL
-                        if (context.dataIndex === bdIndex) return 6; // Larger for BD
+                        if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 8; // Larger for EOL/BD
                         return 3; // Default size
                     },
-                    pointBackgroundColor: (context) => {
-                        // Change color for specific points
+                    pointBorderColor: (context) => {
+                        // Color only the border for specific points
                         if (context.dataIndex === eolIndex) return 'red';
                         if (context.dataIndex === bdIndex) return 'green';
                         return 'transparent'; // Default no color
+                    },
+                    pointBackgroundColor: 'transparent', // Keep points hollow
+                    pointBorderWidth: (context) => {
+                        // Thicker border for EOL and BD
+                        if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 2;
+                        return 1;
                     }
                 },
                 {
@@ -63,16 +68,17 @@ function updateRulChart(data) {
                     const xScale = chart.scales.x;
                     const yScale = chart.scales.y;
 
-                    // Draw circles on the corresponding data points
+                    // Draw hollow circles on the corresponding data points
                     if (bdIndex !== -1) {
                         const xPixel = xScale.getPixelForValue(data.time[bdIndex]);
                         const yPixel = yScale.getPixelForValue(data.rul[bdIndex]);
 
                         ctx.save();
                         ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 6, 0, 2 * Math.PI); // Circle for BD
-                        ctx.fillStyle = 'green';
-                        ctx.fill();
+                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Outer circle
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = 'green';
+                        ctx.stroke();
                         ctx.restore();
                     }
 
@@ -82,9 +88,10 @@ function updateRulChart(data) {
 
                         ctx.save();
                         ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 6, 0, 2 * Math.PI); // Circle for EOL
-                        ctx.fillStyle = 'red';
-                        ctx.fill();
+                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Outer circle
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = 'red';
+                        ctx.stroke();
                         ctx.restore();
                     }
                 }
