@@ -1,14 +1,17 @@
 let rulChart = null;  // Global variable for the RUL chart
-let showVerticalLine = true;  // Toggle state for the vertical line
+let verticalLines = [
+    { x: null, label: 'Jump Point', visible: true }, // First vertical line
+    { x: null, label: 'Another Point', visible: true } // Second vertical line
+];
 
 function updateRulChart(data) {
     const ctx = document.getElementById('rulChart').getContext('2d');
 
     if (rulChart) rulChart.destroy();
 
-    // Find the index of the non-zero value in the JumpColumn
-    const verticalLineIndex = data.jumpColumn.findIndex(value => value !== 0);
-    const verticalLineX = data.time[verticalLineIndex]; // Get the corresponding x-axis value
+    // Determine positions for each vertical line
+    verticalLines[0].x = data.time[data.jumpColumn.findIndex(value => value !== 0)]; // First line
+    verticalLines[1].x = data.time[data.jumpColumn.findIndex(value => value === SOME_CONDITION)]; // Replace with your logic for the second line
 
     rulChart = new Chart(ctx, {
         type: 'line',
@@ -38,38 +41,42 @@ function updateRulChart(data) {
             {
                 id: 'verticalLinePlugin',
                 beforeDraw: (chart) => {
-                    if (!showVerticalLine || verticalLineIndex === -1) return; // Skip drawing if toggled off or no valid index
-
                     const ctx = chart.ctx;
                     const xScale = chart.scales.x;
                     const yScale = chart.scales.y;
 
-                    // Get the pixel position of the vertical line on the x-axis
-                    const xPixel = xScale.getPixelForValue(verticalLineX);
+                    verticalLines.forEach(line => {
+                        if (!line.visible || line.x === null) return; // Skip if not visible or x is null
 
-                    // Draw the vertical line
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.moveTo(xPixel, yScale.top); // Start from the top of the y-axis
-                    ctx.lineTo(xPixel, yScale.bottom); // Extend to the bottom of the y-axis
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'rgba(0, 0, 255, 0.8)'; // Line color and opacity
-                    ctx.stroke();
+                        // Get the pixel position of the vertical line on the x-axis
+                        const xPixel = xScale.getPixelForValue(line.x);
 
-                    // Draw the label for the vertical line
-                    ctx.font = '12px Arial';
-                    ctx.fillStyle = 'blue';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('Jump Point', xPixel, yScale.top - 10); // Label position slightly above the line
-                    ctx.restore();
+                        // Draw the vertical line
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.moveTo(xPixel, yScale.top); // Start from the top of the y-axis
+                        ctx.lineTo(xPixel, yScale.bottom); // Extend to the bottom of the y-axis
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = 'rgba(0, 0, 255, 0.8)'; // Line color and opacity
+                        ctx.stroke();
+
+                        // Draw the label for the vertical line
+                        ctx.font = '12px Arial';
+                        ctx.fillStyle = 'blue';
+                        ctx.textAlign = 'center';
+                        ctx.fillText(line.label, xPixel, yScale.top - 10); // Label position slightly above the line
+                        ctx.restore();
+                    });
                 }
             }
         ]
     });
 }
 
-// Function to toggle the vertical line
-function toggleVerticalLine() {
-    showVerticalLine = !showVerticalLine;  // Toggle the state
-    rulChart.update();  // Update the chart to reflect the change
+// Function to toggle visibility of a specific vertical line
+function toggleVerticalLine(index) {
+    if (verticalLines[index]) {
+        verticalLines[index].visible = !verticalLines[index].visible; // Toggle visibility
+        rulChart.update(); // Update the chart to reflect the change
+    }
 }
