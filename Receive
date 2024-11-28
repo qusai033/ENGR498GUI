@@ -10,3 +10,42 @@ def upload():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+from flask import Flask, render_template
+
+app = Flask(__name__)
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------------
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Control</title>
+</head>
+
+<body>
+    <h1>Arduino Data Control</h1>
+    <button onclick="sendRequest('/GET_DATA')">Get New Data</button>
+
+    <script>
+        function sendRequest(action) {
+            fetch(`http://192.168.0.158${action}`, { method: 'GET' })
+                .then(response => response.text())
+                .then(data => console.log('Response from Arduino:', data))
+                .catch(error => console.error('Error:', error));
+        }
+    </script>
+</body>
+
+</html>
