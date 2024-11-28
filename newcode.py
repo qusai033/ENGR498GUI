@@ -4,11 +4,12 @@ import os
 app = Flask(__name__)
 
 # Path to the directory containing device folders
-DATA_DIRECTORY = './data/device/voltage_log'  # Update to match your directory structure
-COUNTER_FILE = './file_counter.txt'  # File to store the counter
+UPLOAD_DATA_DIRECTORY = './data/uploads/voltage_log'  # Update to match your directory structure
+COUNTER_FILE = './data/uploads/file_voltage_counter.txt'  # File to store the counter
 
 # Ensure directories and counter file exist
-os.makedirs(DATA_DIRECTORY, exist_ok=True)
+os.makedirs(UPLOAD_DATA_DIRECTORY, exist_ok=True)
+os.makedirs(COUNTER_FILE, exist_ok=True)
 if not os.path.exists(COUNTER_FILE):
     with open(COUNTER_FILE, 'w') as f:
         f.write('0')  # Initialize the counter to 0
@@ -39,10 +40,10 @@ def upload_file():
 
         # Increment the file counter and generate a unique filename
         file_counter = increment_file_counter()
-        filename = f"file_{file_counter}.csv"
+        filename = f"voltageDecay_{file_counter}.csv"
 
         # Save the received CSV data to the desired folder
-        save_path = os.path.join(DATA_DIRECTORY, filename)
+        save_path = os.path.join(UPLOAD_DATA_DIRECTORY, filename)
         with open(save_path, 'w') as f:
             f.write(csv_data)
 
