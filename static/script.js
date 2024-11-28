@@ -1,26 +1,16 @@
-let rulChart = null;  // Global variable for the RUL chart
-let verticalLines = [
-    { x: null, label: 'Jump Point', visible: true }, // First vertical line
-    { x: null, label: 'Another Point', visible: true } // Second vertical line
-];
+function updateSoHChart(data) {
+    const ctx = document.getElementById('sohChart').getContext('2d');
 
-function updateRulChart(data) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
+    if (sohChart) sohChart.destroy();
 
-    if (rulChart) rulChart.destroy();
-
-    // Determine positions for each vertical line
-    verticalLines[0].x = data.time[data.jumpColumn.findIndex(value => value !== 0)]; // First line
-    verticalLines[1].x = data.time[data.jumpColumn.findIndex(value => value === SOME_CONDITION)]; // Replace with your logic for the second line
-
-    rulChart = new Chart(ctx, {
+    sohChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.time,
             datasets: [{
-                label: 'Remaining Useful Life (RUL)',
-                data: data.rul,
-                borderColor: 'rgb(255, 99, 132)',
+                label: 'State-of-Health (SoH)',
+                data: data.soh,
+                borderColor: 'rgb(153, 102, 255)',
                 tension: 0.1,
                 fill: false
             }]
@@ -28,7 +18,7 @@ function updateRulChart(data) {
         options: {
             scales: {
                 x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'RUL [AU]' } }
+                y: { title: { display: true, text: 'SoH [%]' } }
             },
             plugins: {
                 zoom: {
@@ -39,44 +29,118 @@ function updateRulChart(data) {
         },
         plugins: [
             {
-                id: 'verticalLinePlugin',
+                id: 'circlePlugin',
                 beforeDraw: (chart) => {
                     const ctx = chart.ctx;
                     const xScale = chart.scales.x;
                     const yScale = chart.scales.y;
 
-                    verticalLines.forEach(line => {
-                        if (!line.visible || line.x === null) return; // Skip if not visible or x is null
+                    // Determine the circle position from the data
+                    const highlightIndex = data.soh.findIndex(value => value > SOME_CONDITION); // Replace with your condition
+                    if (highlightIndex !== -1) {
+                        const xValue = data.time[highlightIndex];
+                        const yValue = data.soh[highlightIndex];
 
-                        // Get the pixel position of the vertical line on the x-axis
-                        const xPixel = xScale.getPixelForValue(line.x);
+                        const xPixel = xScale.getPixelForValue(xValue);
+                        const yPixel = yScale.getPixelForValue(yValue);
 
-                        // Draw the vertical line
+                        // Draw the circle
                         ctx.save();
                         ctx.beginPath();
-                        ctx.moveTo(xPixel, yScale.top); // Start from the top of the y-axis
-                        ctx.lineTo(xPixel, yScale.bottom); // Extend to the bottom of the y-axis
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'rgba(0, 0, 255, 0.8)'; // Line color and opacity
-                        ctx.stroke();
+                        ctx.arc(xPixel, yPixel, circleConfig.soh.radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = circleConfig.soh.color;
+                        ctx.fill();
 
-                        // Draw the label for the vertical line
+                        // Draw the label
                         ctx.font = '12px Arial';
-                        ctx.fillStyle = 'blue';
+                        ctx.fillStyle = circleConfig.soh.color;
                         ctx.textAlign = 'center';
-                        ctx.fillText(line.label, xPixel, yScale.top - 10); // Label position slightly above the line
+                        ctx.fillText(circleConfig.soh.label, xPixel, yPixel - 10);
                         ctx.restore();
-                    });
+                    }
                 }
             }
         ]
     });
 }
 
-// Function to toggle visibility of a specific vertical line
-function toggleVerticalLine(index) {
-    if (verticalLines[index]) {
-        verticalLines[index].visible = !verticalLines[index].visible; // Toggle visibility
-        rulChart.update(); // Update the chart to reflect the change
-    }
+function updateFDChart(data) {
+    const ctx = document.getElementById('fdChart').getContext('2d');
+
+    if (fdChart) fdChart.destroy();
+
+    fdChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time,
+            datasets: [{
+                label: 'Feature Data (FD)',
+                data: data.fd,
+                borderColor: 'rgb(54, 162, 235)',
+                tension: 0.1,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 'Time [AU]' } },
+                y: { title: { display: true, text: 'FD [AU]' } }
+            },
+            plugins: {
+                zoom: {
+                    pan: { enabled: true, mode: 'xy' },
+                    zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
+                }
+            }
+        },
+        plugins: [
+            {
+                id: 'circlePlugin',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
+
+                    // Determine the circle position from the data
+                    const highlightIndex = data.fd.findIndex(value => value > SOME_CONDITION); // Replace with your condition
+                    if (highlightIndex !== -1) {
+                        const xValue = data.time[highlightIndex];
+                        const yValue = data.fd[highlightIndex];
+
+                        const xPixel = xScale.getPixelForValue(xValue);
+                        const yPixel = yScale.getPixelForValue(yValue);
+
+                        // Draw the circle
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.arc(xPixel, yPixel, circleConfig.fd.radius, 0, 2 * Math.PI);
+                        ctx.fillStyle = circleConfig.fd.color;
+                        ctx.fill();
+
+                        // Draw the label
+                        ctx.font = '12px Arial';
+                        ctx.fillStyle = circleConfig.fd.color;
+                        ctx.textAlign = 'center';
+                        ctx.fillText(circleConfig.fd.label, xPixel, yPixel - 10);
+                        ctx.restore();
+                    }
+                }
+            }
+        ]
+    });
 }
+
+
+// Circle configurations
+const circleConfig = {
+    soh: {
+        color: 'red',
+        radius: 5,
+        label: 'SoH Event'
+    },
+    fd: {
+        color: 'green',
+        radius: 5,
+        label: 'FD Event'
+    }
+};
