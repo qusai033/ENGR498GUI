@@ -1,3 +1,6 @@
+let rulChart = null;  // Global variable for the RUL chart
+let showVerticalLine = true;  // Toggle state for the vertical line
+
 function updateRulChart(data) {
     const ctx = document.getElementById('rulChart').getContext('2d');
 
@@ -35,6 +38,8 @@ function updateRulChart(data) {
             {
                 id: 'verticalLinePlugin',
                 beforeDraw: (chart) => {
+                    if (!showVerticalLine || verticalLineIndex === -1) return; // Skip drawing if toggled off or no valid index
+
                     const ctx = chart.ctx;
                     const xScale = chart.scales.x;
                     const yScale = chart.scales.y;
@@ -50,9 +55,21 @@ function updateRulChart(data) {
                     ctx.lineWidth = 2;
                     ctx.strokeStyle = 'rgba(0, 0, 255, 0.8)'; // Line color and opacity
                     ctx.stroke();
+
+                    // Draw the label for the vertical line
+                    ctx.font = '12px Arial';
+                    ctx.fillStyle = 'blue';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('Jump Point', xPixel, yScale.top - 10); // Label position slightly above the line
                     ctx.restore();
                 }
             }
         ]
     });
+}
+
+// Function to toggle the vertical line
+function toggleVerticalLine() {
+    showVerticalLine = !showVerticalLine;  // Toggle the state
+    rulChart.update();  // Update the chart to reflect the change
 }
