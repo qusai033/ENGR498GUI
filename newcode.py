@@ -1,6 +1,12 @@
 let voltageChart = null;  // Declare chart globally so it can be destroyed later
 let rulChart = null;  // Declare a global variable for the RUL (health) chart
 let allDevices = [];  // Store the list of all devices for filtering
+let sohChart = null;
+let fdChart = null;
+let verticalLines = [
+    { x: null, label: 'End of Life', visible: true, color: 'red'},
+    { x: null, label: 'Beginging of Degradation', visible: true, color: 'green'}
+];
 
 
 function zoomStatus(chart) {
@@ -55,86 +61,180 @@ function loadDevices() {
         .catch(error => console.error('Error loading devices:', error));
 }
 
-
-function fetchAndPlotData(device) {
-
-
+function showGraphsForDevice(device) {
+    // Fetch and update data for all four graphs
     fetch(`/data/${device}/voltageData.csv`)
+        .then(response => response.json())
+        .then(data => updateVoltageChart(data));
+
+    fetch(`/data/${device}/rulData.csv`)
         .then(response => {
-            if(!response.ok){
-                throw new Error('Voltage not found');
+            if (!response.ok) {
+                throw new Error('Data not found');
             }
             return response.json();
         })
         .then(data => {
-            updateVoltageChart(data);
+            console.log("Fetched Data:", data);  // Debug fetched data
+
+            // Update all charts
+            updateRulChart(data);  // RUL Chart
+            updateSoHChart(data);  // SoH Chart
+            updateFDChart(data);   // FD Chart
         })
-        .catch(error => console.error('Error loading voltage data:', error));
+        .catch(error => console.error('Error loading data:', error));
 
-    // Fetch data from the Flask endpoint
-    fetch(`/data/${device}/rulData.csv`)
-      .then(response => response.json())
-      .then(data => {
-        // Log data for debugging
-        console.log("Fetched data:", data);
-
-        // Ensure data is not empty
-        if (!data.time || data.time.length === 0) {
-          console.error("No time data available!");
-          return;
-        }
-
-        // Plot each chart
-        plotChart('rulChart', 'Remaining Useful Life (RUL)', data.time, data.rul, 'rgb(255, 99, 132)');
-        plotChart('fdChart', 'Feature Data (FD)', data.time, data.fd, 'rgb(54, 162, 235)');
-        plotChart('sohChart', 'State of Health (SoH)', data.time, data.soh, 'rgb(75, 192, 192)');
-      })
-      .catch(error => console.error('Error fetching or plotting data:', error));
 }
 
-function plotChart(chartId, label, time, dataset, color) {
-    const ctx = document.getElementById(chartId).getContext('2d');
-    
-    // Check if the chart element exists
-    if (!ctx) {
-      console.error(`Chart element with ID ${chartId} not found!`);
-      return;
-    }
+// Update the RUL chart with JSON data (no need to parse with parseData)
+function updateRulChart(data) {
+    const ctx = document.getElementById('rulChart').getContext('2d');
 
-    // Create the chart
-    new Chart(ctx, {
+    if (rulChart) rulChart.destroy();
+
+    rulChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: time, // Time as the x-axis
-            datasets: [
-              {
-                label: label, // Chart label (e.g., RUL, FD, SoH)
-                data: dataset, // Corresponding data array
-                borderColor: color,
-                fill: false,
-                tension: 0.1
-              }
-            ]
+            labels: data.time,
+            datasets: [{
+                label: 'Remaining Useful Life (RUL)',
+                data: data.rul,
+                borderColor: 'rgb(255, 99, 132)',
+                tension: 0.1,
+                fill: false
+            },
+            {
+            label: 'Prognostic (PH)',
+            data: data.ph,
+            borderColor: 'rgb(54, 162, 132)',
+            tension: 0.1,
+            fill: false
+        
+            }]
         },
         options: {
             scales: {
                 x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: label } }
+                y: { title: { display: true, text: 'RUL/PH [AU]' } }
             },
             plugins: {
-                zoom: {
-                    pan: {
-                        enabled: true,
-                        mode: 'xy'
-                    },
-                    zoom: {
-                        wheel: { enabled: true },
-                        pinch: { enabled: true },
-                        mode: 'xy'
-                    }
+                zoom: zoomOptions,
+                title: {
+                    display: true,
+                    position: 'bottom',
+                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
                 }
             }
         }
+    });
+}
+
+function updateSoHChart(data) {
+    console.log("SoH Data:", data.soh);
+
+    const ctx = document.getElementById('sohChart').getContext('2d');
+
+    if (sohChart) sohChart.destroy();
+
+    sohChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time, // Replace with appropriate data
+            datasets: [{
+                label: 'State-of-Health (SoH)',
+                data: data.soh, // Replace with appropriate data
+                borderColor: 'rgb(153, 102, 255)',
+                tension: 0.1,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 'Time [AU]' } },
+                y: { title: { display: true, text: 'SoH [%]' } }
+            },
+            plugins: {
+                zoom: zoomOptions,
+                title: {
+                    display: true,
+                    position: 'bottom',
+                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
+                }
+            }
+        }
+    });
+}
+
+function updateFDChart(data) {
+    console.log("SoH Data:", data.fd);
+    const ctx = document.getElementById('fdChart').getContext('2d');
+
+    if (fdChart) fdChart.destroy();
+
+    verticalLines[0].x = data.time[data.eol.findIndex(value => value !== 0)];
+    verticalLines[1].x = data.time[data.bd.findIndex(value => value !== 0)]; // Get the corresponding x-axis value
+
+    fdChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time, // Replace with appropriate data
+            datasets: [{
+                label: 'Feature Data (FD)',
+                data: data.fd, // Replace with appropriate data
+                borderColor: 'rgb(153, 102, 255)',
+                tension: 0.1,
+                fill: false
+            }]
+        },
+        options: {
+            scales: {
+                x: { title: { display: true, text: 'Time [AU]' } },
+                y: { title: { display: true, text: 'FD [AU]' } }
+            },
+            plugins: {
+                zoom: zoomOptions,
+                title: {
+                    display: true,
+                    position: 'bottom',
+                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
+                }
+            }
+        },
+        plugins: [
+            {
+                id: 'verticalLinePlugin',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
+
+                    verticalLines.forEach(line => {
+                        if (!line.visible || line.x === null) return; // Skip if not visible or x is null
+
+                        // Get the pixel position of the vertical line on the x-axis
+                        const xPixel = xScale.getPixelForValue(line.x);
+
+                        // Draw the vertical line
+                        ctx.save();
+                        ctx.setLineDash([5, 5]); //5px dash line
+                        ctx.beginPath();
+                        ctx.moveTo(xPixel, yScale.top); // Start from the top of the y-axis
+                        ctx.lineTo(xPixel, yScale.bottom); // Extend to the bottom of the y-axis
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = line.color; // Line color and opacity
+                        ctx.stroke();
+
+                        // Draw the label for the vertical line
+                        ctx.setLineDash([]); //reset line dash for text
+                        ctx.font = '12px Arial';
+                        ctx.fillStyle = line.color;
+                        ctx.textAlign = 'center';
+                        ctx.fillText(line.label, xPixel, yScale.top - 10); // Label position slightly above the line
+                        ctx.restore();
+                    });
+                }
+            }
+        ]
     });
 }
 
@@ -173,21 +273,25 @@ function updateVoltageChart(data) {
 }
 
 
-// Utility function to parse text data into a format usable by the chart
-function parseData(data) {
+function parseCsvData(data) {
     const lines = data.split('\n');
-    const labels = [];
-    const values = [];
+    const headers = lines[0].split(',');
+    const result = {};
 
-    lines.forEach(line => {
-        const [label, value] = line.includes(';') ? line.split(';') : line.split(',');
-        if (label && value) {  // Ensure both label and value exist
-            labels.push(label.trim());
-            values.push(parseFloat(value.trim()));
-        }
+    // Initialize result arrays for each column
+    headers.forEach(header => result[header] = []);
+
+    // Populate result arrays
+    lines.slice(1).forEach(line => {
+        const values = line.split(',');
+        headers.forEach((header, index) => {
+            if (values[index]) {
+                result[header].push(parseFloat(values[index]));
+            }
+        });
     });
 
-    return { labels, values };
+    return result;  // Return an object with arrays for each column
 }
 
 
@@ -201,14 +305,20 @@ function displayDevices(devices) {
         div.textContent = device;
         div.classList.add('device-item');
         div.onclick = function() {
-            fetchAndPlotData(device); // Load graphs when clicking on a device
+            showGraphsForDevice(device); // Load graphs when clicking on a device
         };
         deviceList.appendChild(div);
     });
 
     document.querySelector('.search-results').style.display = devices.length ? 'block' : 'none'; // Show or hide dropdown
 }
-
+// Function to toggle visibility of a specific vertical line
+function toggleVerticalLine(index) {
+    if (verticalLines[index]) {
+        verticalLines[index].visible = !verticalLines[index].visible; // Toggle visibility
+        fdChart.update(); // Update the chart to reflect the change
+    }
+}
 // Function to filter devices based on search input
 function filterDevices() {
     const query = document.getElementById('deviceSearch').value.toLowerCase();
@@ -218,97 +328,3 @@ function filterDevices() {
 
 // Load devices on page load
 window.onload = loadDevices;
-
-
-from flask import Flask, jsonify, render_template, request, abort
-import pandas as pd
-import os
-
-app = Flask(__name__)
-
-# Path to the directory containing device folders
-DATA_DIRECTORY = '../data'  # Relative path to the data folder
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
-
-# Upload file route
-@app.route('/upload', methods=['POST'])
-def upload():
-        # Get the uploaded file content from the request
-        file = request.data  # This will capture the raw data sent by the Arduino
-
-        # Save the file to the specified path
-        file_path = os.path.join(DATA_DIRECTORY, "uploaded_file.csv")
-        with open('data_received.csv', "wb") as f:  # Write the file content in binary mode
-            f.write(file)
-        
-        return "File uploaded successfully", 200
-
-    
-
-# Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
-@app.route('/list_devices', methods=['GET'])
-def list_devices():
-    try:
-        # List all directories (devices) within the DATA_DIRECTORY
-        devices = [d for d in os.listdir(DATA_DIRECTORY) if os.path.isdir(os.path.join(DATA_DIRECTORY, d))]
-        return jsonify(devices)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Endpoint to get voltage data for a specific device
-@app.route('/data/<device>/voltageData.csv', methods=['GET'])
-def get_voltage_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="Voltage data file not found.")
-    
-    # Load the CSV data into a pandas DataFrame
-    df = pd.read_csv(file_path)
-    
-    # Check if the necessary columns exist in the CSV
-    if 'Time' not in df.columns or 'Voltage' not in df.columns:
-        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
-    
-    # Convert the DataFrame to a dictionary suitable for JSON
-    data = {
-        "time": df['Time'].tolist(),
-        "voltage": df['Voltage'].tolist()
-    }
-    
-    return jsonify(data)
-
-@app.route('/data/<device>/rulData.csv', methods=['GET'])
-def get_rul_fd_soh_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="RUL data file not found.")
-    
-    try:
-        df = pd.read_csv(file_path)
-        
-        # Ensure all required columns exist
-        required_columns = ['DT', 'RUL', 'FD', 'SoH']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            return abort(400, description=f"Missing columns: {', '.join(missing_columns)}")
-        
-        # Prepare JSON response
-        data = {
-            "time": df['DT'].tolist(),
-            "rul": df['RUL'].tolist(),
-            "fd": df['FD'].tolist(),
-            "soh": df['SoH'].tolist()
-        }
-        return jsonify(data)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(debug=True)
