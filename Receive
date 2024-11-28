@@ -1,51 +1,29 @@
-from flask import Flask, request
+# Ensure the data directory exists
+if not os.path.exists(DATA_DIRECTORY):
+    os.makedirs(DATA_DIRECTORY)
 
-app = Flask(__name__)
 
 @app.route('/upload', methods=['POST'])
-def upload():
-    print("Received a connection")
-    # Process file here
-    return "File received", 200
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
 
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+    try:
+        # Ensure the device directory exists
+        device = request.form.get('device')
+        device_path = os.path.join(DATA_DIRECTORY, device)
+        if not os.path.exists(device_path):
+            os.makedirs(device_path)
 
-from flask import Flask, render_template
+        # Save the file to the device folder
+        file_path = os.path.join(device_path, file.filename)
+        file.save(file_path)
 
-app = Flask(__name__)
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
-
-----------------------------------------------------------------------------------------------------------------------------------------------------------------
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Control</title>
-</head>
-
-<body>
-    <h1>Arduino Data Control</h1>
-    <button onclick="sendRequest('/GET_DATA')">Get New Data</button>
-
-    <script>
-        function sendRequest(action) {
-            fetch(`http://192.168.0.158${action}`, { method: 'GET' })
-                .then(response => response.text())
-                .then(data => console.log('Response from Arduino:', data))
-                .catch(error => console.error('Error:', error));
-        }
-    </script>
-</body>
-
-</html>
+        # Return success message
+        return jsonify({"message": f"File '{file.filename}' uploaded successfully to {device}."}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
