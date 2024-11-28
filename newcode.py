@@ -4,8 +4,21 @@ import os
 
 app = Flask(__name__)
 
+
 # Path to the directory containing device folders
 DATA_DIRECTORY = '../data'  # Relative path to the data folder
+# Upload file route
+# Directory where files will be saved
+UPLOAD_FOLDER = '/path/to/save/files'
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# Allowed file extensions (including CSV)
+ALLOWED_EXTENSIONS = {'csv'}
+
+# Function to check allowed file types
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 @app.route('/')
 def index():
@@ -13,12 +26,21 @@ def index():
 
 
 
-# Upload file route
 @app.route('/upload', methods=['POST'])
-def upload():
-    print("Received a connection")
-    # Process file here
-    return "File received", 200
+def upload_file():
+    if 'file' not in request.files:
+        return jsonify({"error": "No file part"}), 400
+
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+
+    if file and allowed_file(file.filename):
+        filename = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(filename)
+        return jsonify({"message": f"File '{file.filename}' uploaded successfully."}), 200
+
+    return jsonify({"error": "Invalid file format. Only .csv files are allowed."}), 400
 
     
 
