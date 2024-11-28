@@ -1,101 +1,90 @@
-function updateRulChart(data) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
+from flask import Flask, jsonify, render_template, request, abort
+import pandas as pd
+import os
 
-    if (rulChart) rulChart.destroy();
+app = Flask(__name__)
 
-    // Find the indices for BD and EOL in the RUL data
-    const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
-    const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
+# Path to the directory containing device folders
+DATA_DIRECTORY = '../data'  # Relative path to the data folder
 
-    // Update the RUL chart
-    rulChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time, // X-axis values
-            datasets: [
-                {
-                    label: 'Remaining Useful Life (RUL)',
-                    data: data.rul, // RUL data series
-                    borderColor: 'rgb(255, 99, 132)',
-                    tension: 0.1,
-                    fill: false,
-                    pointRadius: (context) => {
-                        // Highlight specific points with a larger radius
-                        if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 8; // Larger for EOL/BD
-                        return 3; // Default size
-                    },
-                    pointBorderColor: (context) => {
-                        // Color only the border for specific points
-                        if (context.dataIndex === eolIndex) return 'red';
-                        if (context.dataIndex === bdIndex) return 'green';
-                        return 'transparent'; // Default no color
-                    },
-                    pointBackgroundColor: 'transparent', // Keep points hollow
-                    pointBorderWidth: (context) => {
-                        // Thicker border for EOL and BD
-                        if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 2;
-                        return 1;
-                    }
-                },
-                {
-                    label: 'Prognostic Health (PH)',
-                    data: data.ph, // PH data series
-                    borderColor: 'rgb(54, 162, 132)',
-                    tension: 0.1,
-                    fill: false
-                }
-            ]
-        },
-        options: {
-            scales: {
-                x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'RUL/PH [AU]' } }
-            },
-            plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
-                }
-            }
-        },
-        plugins: [
-            {
-                id: 'circleAnnotationPlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-                    // Draw hollow circles on the corresponding data points
-                    if (bdIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[bdIndex]);
-                        const yPixel = yScale.getPixelForValue(data.rul[bdIndex]);
 
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Outer circle
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'green';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
 
-                    if (eolIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[eolIndex]);
-                        const yPixel = yScale.getPixelForValue(data.rul[eolIndex]);
+# Upload file route
+@app.route('/upload', methods=['POST'])
+def upload():
+    print("Received a connection")
+    # Process file here
+    return "File received", 200
 
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Outer circle
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'red';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                }
-            }
-        ]
-    });
-}
+    
+
+# Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
+@app.route('/list_devices', methods=['GET'])
+def list_devices():
+    try:
+        # List all directories (devices) within the DATA_DIRECTORY
+        devices = [d for d in os.listdir(DATA_DIRECTORY) if os.path.isdir(os.path.join(DATA_DIRECTORY, d))]
+        return jsonify(devices)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# Endpoint to get voltage data for a specific device
+@app.route('/data/<device>/voltageData.csv', methods=['GET'])
+def get_voltage_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="Voltage data file not found.")
+    
+    # Load the CSV data into a pandas DataFrame
+    df = pd.read_csv(file_path)
+    
+    # Check if the necessary columns exist in the CSV
+    if 'Time' not in df.columns or 'Voltage' not in df.columns:
+        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
+    
+    # Convert the DataFrame to a dictionary suitable for JSON
+    data = {
+        "time": df['Time'].tolist(),
+        "voltage": df['Voltage'].tolist()
+    }
+    
+    return jsonify(data)
+
+@app.route('/data/<device>/rulData.csv', methods=['GET'])
+def get_rul_fd_soh_data(device):
+    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
+    
+    if not os.path.exists(file_path):
+        return abort(404, description="RUL data file not found.")
+    
+    try:
+        df = pd.read_csv(file_path)
+        
+        # Ensure all required columns exist
+        required_columns = ['DT', 'RUL', 'PH', 'FD', 'SOH']
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            return abort(400, description=f"Missing columns: {', '.join(missing_columns)}")
+        
+        # Prepare JSON response
+        data = {
+            "time": df['DT'].tolist(),
+            "rul": df['RUL'].tolist(),
+            "ph": df['PH'].tolist(),
+            "fd": df['FD'].tolist(),
+            "eol": df['EOL'].tolist(),
+            "bd": df['BD'].tolist(),
+            "soh": df['SOH'].tolist()
+        }
+        return jsonify(data)
+    except Exception as e:
+        print("Error:", e)  # Debug error
+        return jsonify({"error": str(e)}), 500
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
