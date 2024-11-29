@@ -1,68 +1,98 @@
-import time
-import random
-from paho.mqtt import client as mqtt_client
-from datetime import datetime  # To generate timestamps
 
-broker = 'broker.emqx.io'
-port = 8083
-voltage_topic = "topic/voltage"
-current_topic = "topic/current"
-# Generate a Client ID with the subscribe prefix.
-client_id = f'subscribe-{random.randint(0, 100)}'
-username = 'user1'
-password = '123'
 
-# Function to generate a timestamped filename
-def generate_filename(data_type):
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return f"{data_type}_{timestamp}.txt"
+/***
+  /* Styling for the device dropdown and search input */
+.dropdown {
+  position: relative;
+  display: inline-block;
+}
 
-# Function to generate a timestamp for the data
-def get_current_timestamp():
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+.dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #f1f1f1;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 1;
+}
 
-def connect_mqtt() -> mqtt_client:
-    def on_connect(client, userdata, flags, rc):
-        if rc == 0:
-            print("Connected to MQTT Broker!")
-        else:
-            print("Failed to connect, return code %d\n", rc)
+.dropdown-content div {
+  color: black;
+  padding: 7px 3px;
+  text-decoration: none;
+  display: block;
+  cursor: pointer;
+}
 
-    client = mqtt_client.Client(client_id, transport="websockets")
-    client.username_pw_set(username, password)
-    client.on_connect = on_connect
-    client.connect(broker, port)
-    return client
+.dropdown-content div:hover {
+  background-color: #ddd;
+}
 
-def subscribe(client: mqtt_client):
-    def on_message(client, userdata, msg):
-        message = msg.payload.decode()
-        current_timestamp = get_current_timestamp()  # Get the current time for each data point
-        print(f"Received `{message}` from `{msg.topic}` topic at {current_timestamp}")
+.dropdown:hover .dropdown-content {
+  display: block;
+}
 
-        # Save the message with a timestamp in the file
-        if msg.topic == voltage_topic:
-            filename = generate_filename("voltage")
-            with open(filename, 'w') as f:
-                f.write(f"Timestamp: {current_timestamp}, Voltage: {message}\n")
-            print(f"Saved voltage data to {filename}")
-        elif msg.topic == current_topic:
-            filename = generate_filename("current")
-            with open(filename, 'w') as f:
-                f.write(f"Timestamp: {current_timestamp}, Current: {message}\n")
-            print(f"Saved current data to {filename}")
-        else:
-            print(f"Unknown topic: {msg.topic}")
 
-    # Subscribe to both voltage and current topics
-    client.subscribe(voltage_topic)
-    client.subscribe(current_topic)
-    client.on_message = on_message
+.device-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
 
-def run():
-    client = connect_mqtt()
-    subscribe(client)
-    client.loop_forever()
+/* Add more spacing between the logos */
+.header img {
+  margin-right: 10px;
+}
 
-if __name__ == '__main__':
-    run()
+
+/* Styling for the search input inside the dropdown */
+.search-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* Styling for the search input inside the dropdown */
+.search-input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+/* Search results dropdown container */
+.search-results {
+  max-height: 150px;
+  overflow-y: auto;
+  background-color: #ffffff;  /* Set background to white */
+  border: 1px solid #ccc;  /* Optional: Light border around the search results */
+  position: absolute;
+  top: 100%;  /* Positioned just below the search input */
+  width: 100%;
+  z-index: 1;
+  box-shadow: none; /* Removed shadow to avoid gray box appearance */
+  padding: 0;  /* Ensure no padding creates extra space */
+  border-radius: 4px; /* Add border-radius to smooth the corners */
+}
+
+/* Individual device item styling */
+.device-item {
+  padding: 8px 12px;  /* Adjust padding for device item */
+  cursor: pointer;
+  border-bottom: 1px solid #ddd;  /* Adds a thin separation between items */
+  background-color: #fff;  /* Keep background of each device white */
+}
+
+/* Hover effect for each device item */
+.device-item:hover {
+  background-color: #f0f0f0;  /* Light gray background on hover */
+}
+
+/* Ensure the last device item does not have a border at the bottom */
+.device-item:last-child {
+  border-bottom: none;
+}
