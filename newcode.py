@@ -1,3 +1,4 @@
+import pandas as pd
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -19,17 +20,27 @@ def upload_file():
 
         print(f"File saved to: {save_path}")  # Debug log
 
-        # Traverse `data` directory to find all `voltageData.csv` files
+        # Convert CSV data into a DataFrame for normalization
+        try:
+            df = pd.read_csv(save_path)
+            # Rename columns for consistency
+            if 'Time(s)' in df.columns:
+                df.rename(columns={'Time(s)': 'Time'}, inplace=True)
+            if 'Voltage' not in df.columns:
+                return jsonify({"error": "CSV must contain 'Voltage' column."}), 400
+        except Exception as e:
+            print(f"Error reading or processing CSV: {e}")
+            return jsonify({"error": f"Error processing CSV: {e}"}), 400
+
+        # Traverse `data` directory to find and override `voltageData.csv` files
         overridden_files = []
         for root, dirs, files in os.walk(DATA_DIRECTORY):  # Recursively walk through directories
             for file in files:
                 if file == 'voltageData.csv':  # Check for `voltageData.csv`
                     file_path = os.path.join(root, file)
                     
-                    # Override the file content
-                    with open(file_path, 'w') as f:
-                        f.write(csv_data)
-                    
+                    # Override the file content with normalized data
+                    df.to_csv(file_path, index=False)  # Save normalized DataFrame
                     overridden_files.append(file_path)
 
         if not overridden_files:
