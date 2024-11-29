@@ -1,4 +1,3 @@
-import os
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
@@ -8,6 +7,17 @@ def upload_file():
         if not csv_data:
             print("Error: No data received.")  # Debug log
             return jsonify({"error": "No data received"}), 400
+
+        # Increment the file counter and generate a unique filename
+        file_counter = increment_file_counter()
+        unique_filename = f"voltageDecay_{file_counter}.csv"
+
+        # Save the uniquely named file in the uploads directory
+        save_path = os.path.join(UPLOAD_DATA_DIRECTORY, unique_filename)
+        with open(save_path, 'w') as f:
+            f.write(csv_data)
+
+        print(f"File saved to: {save_path}")  # Debug log
 
         # Traverse `data` directory to find all `voltageData.csv` files
         overridden_files = []
