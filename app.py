@@ -11,17 +11,20 @@ def upload_file():
         csv_stream = StringIO(csv_data)
         df = pd.read_csv(csv_stream)
 
-        # Step 3: Deduplicate the data (excluding the first row)
-        first_row = df.iloc[:1]  # Keep the first row separately
-        remaining_data = df.iloc[1:]  # All data except the first row
-        deduplicated_data = remaining_data.drop_duplicates(subset=['Time', 'Voltage'])  # Remove duplicates
-        deduplicated_df = pd.concat([first_row, deduplicated_data], ignore_index=True)  # Combine back
+        # Step 3: Deduplicate based on `Time` and `Voltage`
+        # Ensure Time and Voltage columns are checked for duplicates
+        if 'Time' not in df.columns or 'Voltage' not in df.columns:
+            print("Error: Missing 'Time' or 'Voltage' columns.")  # Debug log
+            return jsonify({"error": "Missing 'Time' or 'Voltage' columns in CSV"}), 400
+
+        # Drop duplicates based on Time and Voltage
+        df = df.drop_duplicates(subset=['Time', 'Voltage'])
 
         # Step 4: Save the deduplicated file to the uploads directory
         file_counter = increment_file_counter()
         unique_filename = f"voltageDecay_{file_counter}.csv"
         save_path = os.path.join(UPLOAD_DATA_DIRECTORY, unique_filename)
-        deduplicated_df.to_csv(save_path, index=False)
+        df.to_csv(save_path, index=False)
         print(f"Unique data saved to: {save_path}")  # Debug log
 
         # Step 5: Override all `voltageData.csv` files in the `data` directory
@@ -30,7 +33,7 @@ def upload_file():
             for file in files:
                 if file == 'voltageData.csv':
                     file_path = os.path.join(root, file)
-                    deduplicated_df.to_csv(file_path, index=False)
+                    df.to_csv(file_path, index=False)  # Save the deduplicated data
                     overridden_files.append(file_path)
 
         # Step 6: Return response
