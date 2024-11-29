@@ -1,46 +1,46 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+Traceback (most recent call last):
+  File "/home/tuser/Desktop/ENGR498/ARULE4Python/DEMOS/DEMO1.py", line 86, in <module>
+    subprocess.run(command, check=True)
+  File "/usr/lib/python3.10/subprocess.py", line 526, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/home/tuser/Desktop/ENGR498/ARULE4Python/arule_linux.out', 'DEMO1', '2', '0', '1', '/home/tuser/Desktop/ENGR498/ARULE4Python']' returned non-zero exit status 8.
 
-# Load your voltage decay data
-data = pd.read_csv('voltage_data.csv')  # Replace with your file
-data['Time Difference'] = data['Time (s)'].diff()  # Compute time difference
-data['Voltage Difference'] = data['Voltage (V)'].diff()  # Compute voltage difference
-
-# Calculate cumulative voltage difference
-data['Cumulative Voltage Loss'] = data['Voltage Difference'].cumsum()
-
-# Normalize FD to fit a 0-1 range
-max_loss = data['Cumulative Voltage Loss'].max()
-data['Feature Data (FD)'] = data['Cumulative Voltage Loss'] / max_loss
-
-# Save processed data for ARULE
-data[['Time (s)', 'Voltage (V)', 'Feature Data (FD)']].to_csv('arule_input.csv', index=False)
-
-print("Feature Data (FD) calculated and saved to arule_input.csv.")
-
-# Plot Voltage vs. Time and Time vs. FD
-plt.figure(figsize=(12, 10))
-
-# Subplot 1: Voltage vs. Time
-plt.subplot(2, 1, 1)  # 2 rows, 1 column, plot 1
-plt.plot(data['Time (s)'], data['Voltage (V)'], label='Voltage (V)', color='orange', linewidth=2)
-plt.xlabel('Time (s)', fontsize=12)
-plt.ylabel('Voltage (V)', fontsize=12)
-plt.title('Voltage vs. Time', fontsize=14)
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.legend(fontsize=10)
-
-# Subplot 2: Feature Data (FD) vs. Time
-plt.subplot(2, 1, 2)  # 2 rows, 1 column, plot 2
-plt.plot(data['Time (s)'], data['Feature Data (FD)'], label='Feature Data (FD)', color='blue', linewidth=2)
-plt.xlabel('Time (s)', fontsize=12)
-plt.ylabel('Feature Data (FD)', fontsize=12)
-plt.title('Time vs. Feature Data (FD)', fontsize=14)
-plt.grid(True, linestyle='--', alpha=0.6)
-plt.legend(fontsize=10)
-
-# Adjust layout to prevent overlap
-plt.tight_layout()
-
-# Show the plots
-plt.show()
+1,23.3
+2,23.6
+3,23.7
+4,23.8
+5,23.6
+6,23.9
+7,23.7
+8,23.4
+9,23.75
+10,23.8
+11,23.2
+12,23.6
+13,23.7
+14,23.3
+15,23.8
+16,23.4
+17,23.2
+18,23.6
+19,23.9
+20,23.7
+21,23.8
+22,23.4
+23,23.6
+24,23.2
+25,23.6
+26,23.913
+27,23.821
+28,23.427
+29,23.626
+30,23.386
+31,23.45
+32,23.209
+33,23.265
+34,23.62
+35,23.4
+36,23.3
+37,23.7
+38,23.6
+39,23.5
