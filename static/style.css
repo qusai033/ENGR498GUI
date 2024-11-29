@@ -30,7 +30,7 @@ body {
 }
 
 .sidebar {
-  width: 10%; /* Adjusted width for sidebar */
+  width: 10%;
   background-color: #e0e0e0;
   display: flex;
   flex-direction: column;
@@ -56,10 +56,11 @@ body {
 }
 
 .graphs-grid {
-  flex-grow: 1; /* Use remaining space */
+  flex-grow: 1;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Responsive columns */
-  grid-gap: 20px;
+  grid-template-columns: 1fr 1fr; /* Two columns */
+  grid-template-rows: auto auto; /* Two rows */
+  grid-gap: 20px;               /* Space between graphs */
   padding: 20px;
   background-color: #f0f8ff;
 }
@@ -76,9 +77,15 @@ body {
 
 .graph canvas {
   width: 100%;
-  height: 100%; /* Adjust as needed for graph height */
+  height: 300px; /* Adjust as needed */
 }
 
-.footer {
-  display: none; /* Remove the footer (Legend) */
+@media screen and (max-width: 768px) {
+  .graphs-grid {
+    grid-template-columns: 1fr; /* Switch to one column on smaller screens */
+  }
+
+  .sidebar {
+    width: 15%; /* Slightly larger sidebar for smaller screens */
+  }
 }
