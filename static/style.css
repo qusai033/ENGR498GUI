@@ -80,12 +80,33 @@ body {
   height: 300px; /* Adjust as needed */
 }
 
-@media screen and (max-width: 768px) {
+/* Responsive Design */
+@media screen and (max-width: 1024px) {
   .graphs-grid {
-    grid-template-columns: 1fr; /* Switch to one column on smaller screens */
+    grid-template-columns: 1fr; /* Switch to one column for smaller screens */
+    grid-template-rows: auto;  /* Adjust rows automatically */
   }
 
   .sidebar {
-    width: 15%; /* Slightly larger sidebar for smaller screens */
+    width: 15%; /* Slightly wider sidebar for smaller screens */
+  }
+
+  .graph canvas {
+    height: 250px; /* Reduce graph height on smaller screens */
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .graphs-grid {
+    grid-template-columns: 1fr; /* Stack graphs in one column */
+    grid-gap: 10px;             /* Reduce gap between graphs */
+  }
+
+  .sidebar {
+    width: 20%; /* Wider sidebar for very small screens */
+  }
+
+  .graph canvas {
+    height: 200px; /* Further reduce graph height */
   }
 }
