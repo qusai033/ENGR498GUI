@@ -1,78 +1,56 @@
-If you are only using `responsive: true` and avoiding `maintainAspectRatio: false` due to stretching issues, here's a more tailored approach to handle resizing properly without distortion:
+The issue seems to be related to how the chart canvas dimensions are recalculated during resizing, particularly when reducing the size of the window. Chart.js may not be updating properly due to how resizing is handled or how parent container dimensions are propagated to the charts.
+
+Here's a refined approach to resolve the problem:
 
 ---
 
-### Key Adjustments to Avoid Stretching
-1. **Ensure Parent Container Resizing:** The chart’s parent container must resize properly. Constrain its width and height dynamically via CSS.
-2. **Dynamic Height for Graphs:** Use percentages or `vh` units for height to prevent hardcoded dimensions.
-3. **Aspect Ratio Handling via CSS:** Let Chart.js inherit width and height from the parent container.
+### Adjust Chart.js Resizing Logic
+
+1. **Ensure Parent Container Adjusts Dynamically:**
+   Update the parent container's CSS to always reflect the resized dimensions.
+
+2. **Force Chart Resize on Window Resizing:**
+   Explicitly trigger a `resize()` for all charts when the window size changes.
 
 ---
 
-### Step 1: CSS for `.graph` and `.canvas`
-Define styles to ensure the container adapts to the screen size while maintaining proper scaling.
+### Updated JavaScript Logic
+Modify the `adjustCharts` function to handle resizing dynamically for each chart:
 
-```css
-.graph {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: #cfe2f3;
-    border: 1px solid #000;
-    padding: 10px;
-    height: auto;
-    max-height: 50vh; /* Constrain to half the viewport height */
-    width: 100%;
+```javascript
+function adjustCharts() {
+    const charts = [voltageChart, rulChart, sohChart, fdChart];
+    charts.forEach(chart => {
+        if (chart) {
+            chart.resize(); // Force resize
+        }
+    });
 }
 
-.graph canvas {
-    width: 100%;
-    height: calc(100% - 20px); /* Dynamically adjust height */
-}
+// Attach resize event listener
+window.addEventListener('resize', () => {
+    adjustCharts();
+});
 ```
 
 ---
 
-### Step 2: Chart.js Options
-Use only `responsive: true` and let the aspect ratio remain the default (4:3).
+### Chart.js Configuration
+Ensure `responsive: true` and use `maintainAspectRatio: true` (default behavior):
 
 ```javascript
 const commonOptions = {
     responsive: true,
-    plugins: {
-        legend: {
-            display: true,
-            position: 'top'
-        },
-        zoom: {
-            pan: {
-                enabled: true,
-                mode: 'xy'
-            },
-            zoom: {
-                wheel: {
-                    enabled: true
-                },
-                pinch: {
-                    enabled: true
-                },
-                mode: 'xy'
-            }
-        }
-    },
+    maintainAspectRatio: true, // Keep default behavior
     scales: {
-        x: {
-            title: {
-                display: true,
-                text: 'Time'
-            }
-        },
-        y: {
-            title: {
-                display: true,
-                text: 'Value'
-            }
+        x: { title: { display: true, text: 'Time [AU]' } },
+        y: { title: { display: true, text: 'Value' } }
+    },
+    plugins: {
+        legend: { display: true, position: 'top' },
+        zoom: {
+            pan: { enabled: true, mode: 'xy' },
+            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
         }
     }
 };
@@ -80,73 +58,65 @@ const commonOptions = {
 
 ---
 
-### Step 3: Handle Resizing
-Use the `resize` event to handle container changes dynamically.
-
-```javascript
-function adjustCharts() {
-    const charts = [voltageChart, rulChart, sohChart, fdChart];
-    charts.forEach(chart => {
-        if (chart) {
-            chart.resize(); // Dynamically resize chart
-        }
-    });
-}
-
-// Attach resize event listener
-window.addEventListener('resize', adjustCharts);
-```
-
----
-
-### Step 4: Ensure Parent Resizing
-If the parent container (`.graphs-grid` or `.graph`) isn't resizing correctly, ensure it has dynamic dimensions.
+### CSS Adjustments
+Ensure `.graph` and `.graphs-grid` containers adapt dynamically.
 
 ```css
 .graphs-grid {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto;
-    gap: 20px;
+    grid-template-columns: 1fr 1fr; /* Two columns */
+    grid-template-rows: auto auto; /* Two rows */
+    grid-gap: 20px; /* Space between graphs */
     padding: 20px;
+    background-color: #f0f8ff;
     height: auto;
-    max-height: calc(100vh - 100px); /* Account for header/footer */
+    max-height: calc(100vh - 100px); /* Allow charts to scale */
+    width: 100%;
+}
+
+.graph {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background-color: #cfe2f3;
+    border: 1px solid #000;
+    height: auto;
+    width: 100%;
+    max-height: 50vh; /* Constrain to viewport height */
+}
+
+.graph canvas {
+    width: 100%;
+    height: auto; /* Dynamically adjust */
+}
+
+/* Responsive Behavior */
+@media screen and (max-width: 1024px) {
+    .graphs-grid {
+        grid-template-columns: 1fr; /* Switch to single column */
+        grid-gap: 10px;
+    }
 }
 ```
 
 ---
 
-### Step 5: Final Implementation Example
-Here’s how the `updateVoltageChart` might look:
-
-```javascript
-function updateVoltageChart(data) {
-    const ctx = document.getElementById('voltageChart').getContext('2d');
-
-    if (voltageChart) voltageChart.destroy();
-
-    voltageChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [{
-                label: 'Voltage Decay',
-                data: data.voltage,
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1,
-                fill: false
-            }]
-        },
-        options: commonOptions
-    });
-
-    adjustCharts(); // Adjust size dynamically after creation
-}
-```
+### Expected Behavior
+- **When resizing the window horizontally or vertically:** 
+  - The graphs will adjust proportionally and maintain aspect ratios.
+  - Dynamic resizing will be handled seamlessly using the `adjustCharts` function.
+  
+- **Responsive Breakpoints:**
+  - At smaller widths, the grid will switch to a single-column layout.
 
 ---
 
-### Expected Outcome
-- The chart adapts to window resizing without distortion.
-- The `responsive: true` ensures charts scale proportionally within their parent containers.
-- No stretching occurs because `maintainAspectRatio` defaults to `true`.
+### Troubleshooting
+If resizing still doesn't behave as expected:
+1. **Inspect Parent Dimensions:** Ensure the parent container is resizing correctly.
+2. **Debug with `console.log`:** Log container and canvas dimensions during resizing:
+   ```javascript
+   console.log('Parent dimensions:', container.offsetWidth, container.offsetHeight);
+   ```
+3. **Recheck the Resize Event:** Ensure it triggers as expected when the window size changes.
