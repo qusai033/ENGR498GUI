@@ -31,6 +31,7 @@ body {
 
 .sidebar {
   width: 10%;
+  min-width: 100px; /* Ensures the sidebar stays visible on smaller screens */
   background-color: #e0e0e0;
   display: flex;
   flex-direction: column;
@@ -60,9 +61,11 @@ body {
   display: grid;
   grid-template-columns: 1fr 1fr; /* Two columns */
   grid-template-rows: auto auto; /* Two rows */
-  grid-gap: 20px;               /* Space between graphs */
+  grid-auto-rows: 1fr; /* Automatically adjust row height */
+  grid-gap: 20px;      /* Space between graphs */
   padding: 20px;
   background-color: #f0f8ff;
+  transition: all 0.3s ease-in-out; /* Smooth transition during resizing */
 }
 
 .graph {
@@ -73,26 +76,27 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  transition: all 0.3s ease-in-out; /* Smooth resizing for individual graphs */
 }
 
 .graph canvas {
   width: 100%;
-  height: 300px; /* Adjust as needed */
+  height: 100%; /* Dynamically adjust height */
 }
 
 /* Responsive Design */
 @media screen and (max-width: 1024px) {
   .graphs-grid {
-    grid-template-columns: 1fr; /* Switch to one column for smaller screens */
-    grid-template-rows: auto;  /* Adjust rows automatically */
+    grid-template-columns: 1fr; /* Switch to one column */
+    grid-gap: 20px;             /* Keep space between rows */
   }
 
   .sidebar {
-    width: 15%; /* Slightly wider sidebar for smaller screens */
+    width: 15%; /* Adjust sidebar width */
   }
 
   .graph canvas {
-    height: 250px; /* Reduce graph height on smaller screens */
+    height: 80%; /* Adjust graph size proportionally */
   }
 }
 
@@ -107,6 +111,6 @@ body {
   }
 
   .graph canvas {
-    height: 200px; /* Further reduce graph height */
+    height: 70%; /* Further reduce graph height */
   }
 }
