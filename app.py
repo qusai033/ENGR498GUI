@@ -1,69 +1,44 @@
-from flask import Flask, jsonify, render_template, request, abort
-import pandas as pd
-import os
-
-app = Flask(__name__)
-
-# Path to the directory containing device folders
-DATA_DIRECTORY = '../data'  # Relative path to the data folder
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-# Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
-@app.route('/list_devices', methods=['GET'])
-def list_devices():
+@app.route('/upload', methods=['POST'])
+def upload_file():
     try:
-        # List all directories (devices) within the DATA_DIRECTORY
-        devices = [d for d in os.listdir(DATA_DIRECTORY) if os.path.isdir(os.path.join(DATA_DIRECTORY, d))]
-        return jsonify(devices)
+        # Read raw CSV data from the request body
+        csv_data = request.data.decode('utf-8')
+        if not csv_data:
+            print("Error: No data received.")  # Debug log
+            return jsonify({"error": "No data received"}), 400
+
+        # Convert CSV data into a Pandas DataFrame
+        from io import StringIO
+        csv_stream = StringIO(csv_data)
+        df = pd.read_csv(csv_stream)
+
+        # Remove duplicates
+        df = df.drop_duplicates()
+
+        # Save the cleaned, unique data to the uploads directory with a unique name
+        file_counter = increment_file_counter()
+        unique_filename = f"voltageDecay_{file_counter}.csv"
+        save_path = os.path.join(UPLOAD_DATA_DIRECTORY, unique_filename)
+        df.to_csv(save_path, index=False)
+        print(f"Unique data saved to: {save_path}")  # Debug log
+
+        # Override all `voltageData.csv` files in `data` directory
+        overridden_files = []
+        for root, dirs, files in os.walk(DATA_DIRECTORY):
+            for file in files:
+                if file == 'voltageData.csv':
+                    file_path = os.path.join(root, file)
+                    df.to_csv(file_path, index=False)  # Save unique data
+                    overridden_files.append(file_path)
+
+        if not overridden_files:
+            return jsonify({"message": "No voltageData.csv files found to override."}), 404
+
+        print(f"Overridden files: {overridden_files}")  # Debug log
+        return jsonify({
+            "message": f"Uploaded data saved and overridden {len(overridden_files)} voltageData.csv files successfully.",
+            "overridden_files": overridden_files
+        }), 200
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-# Endpoint to get voltage data for a specific device
-@app.route('/data/<device>/voltageData.csv', methods=['GET'])
-def get_voltage_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="Voltage data file not found.")
-    
-    df = pd.read_csv(file_path)
-        # Check if the necessary columns exist in the CSV
-    if 'Time' not in df.columns or 'Voltage' not in df.columns:
-        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
-    # Read the voltage data file as plain text
-    # Convert the DataFrame to a dictionary suitable for JSON
-    data = {
-        "time": df['Time'].tolist(),
-        "voltage": df['Voltage'].tolist()
-    }
-    
-    return jsonify(data)
-
-# Endpoint to get RUL (Remaining Useful Life) data for a specific device
-@app.route('/data/<device>/rulData.csv', methods=['GET'])
-def get_rul_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="RUL data file not found.")
-    
-    # Load the CSV data into a pandas DataFrame
-    df = pd.read_csv(file_path)
-    
-    # Check if the necessary columns exist in the CSV
-    if 'DT' not in df.columns or 'RUL' not in df.columns:
-        return abort(400, description="CSV file must contain 'DT' and 'RUL' columns.")
-    
-    # Convert the DataFrame to a dictionary suitable for JSON
-    data = {
-        "time": df['DT'].tolist(),
-        "rul": df['RUL'].tolist()
-    }
-    
-    return jsonify(data)
-
-if __name__ == "__main__":
-    app.run(debug=True)
+        print(f"Error processing CSV: {e}")  # Debug log
+        return jsonify({"error": f"Error processing CSV: {e}"}), 500
