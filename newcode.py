@@ -1,18 +1,15 @@
-import pandas as pd
+# Plot Time vs. FD
+plt.figure(figsize=(10, 6))
+plt.plot(data['Time (s)'], data['Feature Data (FD)'], label='Feature Data (FD)', color='blue', linewidth=2)
 
-# Load your voltage decay data
-data = pd.read_csv('voltage_data.csv')  # Replace with your file
-data['Time Difference'] = data['Time (s)'].diff()  # Compute time difference
-data['Voltage Difference'] = data['Voltage (V)'].diff()  # Compute voltage difference
+# Add labels and title
+plt.xlabel('Time (s)', fontsize=14)
+plt.ylabel('Feature Data (FD)', fontsize=14)
+plt.title('Time vs. Feature Data (FD)', fontsize=16)
 
-# Calculate cumulative voltage difference
-data['Cumulative Voltage Loss'] = data['Voltage Difference'].cumsum()
+# Add a grid and legend
+plt.grid(True, linestyle='--', alpha=0.6)
+plt.legend(fontsize=12)
 
-# Normalize FD to fit a 0-1 range
-max_loss = data['Cumulative Voltage Loss'].max()
-data['Feature Data (FD)'] = data['Cumulative Voltage Loss'] / max_loss
-
-# Save processed data for ARULE
-data[['Time (s)', 'Voltage (V)', 'Feature Data (FD)']].to_csv('arule_input.csv', index=False)
-
-print("Feature Data (FD) calculated and saved to arule_input.csv.")
+# Show the plot
+plt.show()
