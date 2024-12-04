@@ -1,182 +1,139 @@
-The issue seems to stem from the BD and EOL indices or vertical lines not being correctly updated for some devices. Let’s fix this step by step:
+Let's refine the `updateFDChart` function to incorporate the same level of robustness and consistency as discussed earlier. Here's the updated version:
 
-### Key Areas to Investigate and Resolve:
-1. **Cleaned Data Handling**:
-   Ensure `data.bd`, `data.eol`, and `data.time` are correctly parsed and processed, as they are crucial for determining BD and EOL indices.
-
-2. **Vertical Line Updates**:
-   Ensure `verticalLines` is updated consistently when switching devices.
-
-3. **Chart Redrawing**:
-   Ensure charts are fully redrawn with the updated vertical lines and annotations when switching devices.
-
----
-
-### Fix Implementation
-
-#### Update `showGraphsForDevice`
-
-- Ensure `verticalLines` and indices (`bdIndex`, `eolIndex`) are updated and passed correctly for every dataset.
+### Updated `updateFDChart`
 
 ```javascript
-function showGraphsForDevice(device) {
-    console.log("Switching to Device:", device);
+function updateFDChart(data, bdIndex, eolIndex) {
+    const ctx = document.getElementById('fdChart').getContext('2d');
 
-    // Fetch Voltage Data
-    fetch(`/data/${device}/voltageData.csv`)
-        .then(response => response.json())
-        .then(data => updateVoltageChart(data))
-        .catch(error => console.error('Error loading voltage data:', error));
+    if (fdChart) fdChart.destroy();
 
-    // Fetch RUL Data
-    fetch(`/data/${device}/rulData.csv`)
-        .then(response => response.json())
-        .then(data => {
-            console.log("Fetched Data for Device:", device);
+    // Ensure vertical lines are reset before updating
+    verticalLines[0].x = null;
+    verticalLines[1].x = null;
 
-            // Debug raw data
-            console.log("Raw BD Array:", data.bd);
-            console.log("Raw EOL Array:", data.eol);
-            console.log("Raw Time Array:", data.time);
+    // Clean BD and EOL arrays for robustness
+    const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
+    const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
 
-            // Clear old vertical line states
-            verticalLines[0].x = null; // Clear EOL
-            verticalLines[1].x = null; // Clear BD
+    console.log("Clean BD Array for FD:", cleanBd);
+    console.log("Clean EOL Array for FD:", cleanEol);
 
-            // Clean BD and EOL arrays
-            const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
-            const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
+    // Dynamically find the BD and EOL indices
+    const fdBdIndex = cleanBd.findIndex(value => value !== 0);
+    const fdEolIndex = cleanEol.findIndex(value => value !== 0);
 
-            console.log("Clean BD Array:", cleanBd);
-            console.log("Clean EOL Array:", cleanEol);
+    console.log("FD BD Index:", fdBdIndex, "FD EOL Index:", fdEolIndex);
 
-            // Find BD and EOL indices
-            const bdIndex = cleanBd.findIndex(value => value !== 0);
-            const eolIndex = cleanEol.findIndex(value => value !== 0);
+    if (fdBdIndex >= 0) verticalLines[1].x = data.time[fdBdIndex]; // Update BD line
+    if (fdEolIndex >= 0) verticalLines[0].x = data.time[fdEolIndex]; // Update EOL line
 
-            console.log("BD Index:", bdIndex, "EOL Index:", eolIndex);
+    console.log("Updated Vertical Lines for FD:", verticalLines);
 
-            if (bdIndex < 0 || eolIndex < 0) {
-                console.warn("BD or EOL not found in the current dataset.");
-                return;
-            }
-
-            // Update vertical lines with corresponding time values
-            verticalLines[1].x = data.time[bdIndex]; // BD line
-            verticalLines[0].x = data.time[eolIndex]; // EOL line
-
-            console.log("Updated Vertical Lines:", verticalLines);
-
-            // Update charts with the new data and indices
-            updateRulChart(data, bdIndex, eolIndex);
-            updateSoHChart(data, bdIndex, eolIndex);
-            updateFDChart(data, bdIndex, eolIndex);
-        })
-        .catch(error => console.error('Error loading RUL data:', error));
-}
-```
-
----
-
-#### Ensure Vertical Lines Update Consistently in Charts
-
-For each chart (`updateRulChart`, `updateSoHChart`, `updateFDChart`), use `verticalLines` for vertical line plotting. Ensure the `beforeDraw` plugin dynamically reflects these values.
-
-Example for the RUL Chart:
-
-```javascript
-function updateRulChart(data, bdIndex, eolIndex) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
-
-    if (rulChart) rulChart.destroy();
-
-    rulChart = new Chart(ctx, {
+    fdChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.time,
-            datasets: [
-                {
-                    label: 'Remaining Useful Life (RUL)',
-                    data: data.rul,
-                    borderColor: 'rgb(255, 165, 0)',
-                    tension: 0.1,
-                    fill: false,
-                    pointRadius: 0
+            datasets: [{
+                label: 'Feature Data (FD)',
+                data: data.fd,
+                borderColor: 'rgb(255, 51, 135)',
+                tension: 0.1,
+                fill: false,
+                pointRadius: 0,
+                pointBackgroundColor: (context) => {
+                    if (context.dataIndex === fdEolIndex) return 'red';
+                    if (context.dataIndex === fdBdIndex) return 'green';
+                    return 'transparent'; 
                 },
-                {
-                    label: 'Prognostic Health (PH)',
-                    data: data.ph,
-                    borderColor: 'rgb(0, 150, 136)',
-                    tension: 0.1,
-                    fill: false,
-                    pointRadius: 0
+                pointBorderWidth: (context) => {
+                    if (context.dataIndex === fdEolIndex || context.dataIndex === fdBdIndex) return 1;
+                    return 1;
                 }
-            ],
-            bdIndex: bdIndex,
-            eolIndex: eolIndex
+            }]
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             scales: {
                 x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'RUL/PH [AU]' } }
+                y: { title: { display: true, text: 'FD [AU]' } }
             },
             plugins: {
                 zoom: zoomOptions
             }
         },
-        plugins: [{
-            id: 'verticalLinePlugin',
-            beforeDraw: (chart) => {
-                const ctx = chart.ctx;
-                const xScale = chart.scales.x;
-                const yScale = chart.scales.y;
+        plugins: [
+            {
+                id: 'verticalLinePlugin',
+                beforeDraw: (chart) => {
+                    const ctx = chart.ctx;
+                    const xScale = chart.scales.x;
+                    const yScale = chart.scales.y;
 
-                // Loop through vertical lines and draw them
-                verticalLines.forEach(line => {
-                    if (!line.visible || line.x === null) return;
+                    verticalLines.forEach(line => {
+                        if (!line.visible || line.x === null) return;
 
-                    const xPixel = xScale.getPixelForValue(line.x);
+                        const xPixel = xScale.getPixelForValue(line.x);
 
-                    ctx.save();
-                    ctx.setLineDash([5, 5]); // Dotted line
-                    ctx.beginPath();
-                    ctx.moveTo(xPixel, yScale.top);
-                    ctx.lineTo(xPixel, yScale.bottom);
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = line.color;
-                    ctx.stroke();
+                        // Draw vertical line
+                        ctx.save();
+                        ctx.setLineDash([5, 5]);
+                        ctx.beginPath();
+                        ctx.moveTo(xPixel, yScale.top);
+                        ctx.lineTo(xPixel, yScale.bottom);
+                        ctx.lineWidth = 2;
+                        ctx.strokeStyle = line.color;
+                        ctx.stroke();
 
-                    // Add label
-                    ctx.setLineDash([]);
-                    ctx.font = '12px Arial';
-                    ctx.fillStyle = line.color;
-                    ctx.textAlign = 'center';
-                    ctx.fillText(line.label, xPixel, yScale.top - 10);
-                    ctx.restore();
-                });
+                        // Add label
+                        ctx.setLineDash([]);
+                        ctx.font = '12px Arial';
+                        ctx.fillStyle = line.color;
+                        ctx.textAlign = 'center';
+                        ctx.fillText(line.label, xPixel, yScale.top - 10);
+                        ctx.restore();
+                    });
+                }
             }
-        }]
+        ]
     });
+
+    adjustCharts(); // Adjust size dynamically after creation
 }
 ```
 
-Repeat a similar implementation for `updateSoHChart` and `updateFDChart`.
+---
+
+### Key Improvements
+
+1. **Clean Data**:
+   - Ensures BD and EOL arrays (`data.bd` and `data.eol`) are sanitized to remove `NaN` values and unexpected types.
+
+2. **Dynamic Indices**:
+   - Dynamically calculates `fdBdIndex` and `fdEolIndex` using cleaned data.
+
+3. **Vertical Lines Reset**:
+   - Clears `verticalLines` before updating, ensuring no residual states.
+
+4. **Detailed Logs**:
+   - Logs cleaned arrays and indices for debugging.
+
+5. **Consistent Plugin Behavior**:
+   - Ensures the `verticalLinePlugin` reflects the updated `verticalLines`.
 
 ---
 
-### Debugging Steps
-1. **Verify `verticalLines` Values**:
-   - Log the `verticalLines` array after updating for each device. Ensure it shows the correct `x` values (from `data.time`).
+### Testing Steps
 
-2. **Check Chart Updates**:
-   - Log messages in the `beforeDraw` plugin to confirm the `verticalLines` are being processed.
+1. Ensure the `data` fed to `updateFDChart` has the correct structure, including:
+   - `data.fd`
+   - `data.bd`
+   - `data.eol`
+   - `data.time`
 
-3. **Validate `data.time` Consistency**:
-   - Ensure the `data.time` array for each device matches the expected format and values.
+2. Debugging:
+   - Check the logs for `Clean BD Array`, `Clean EOL Array`, and `Updated Vertical Lines for FD`.
+   - Verify the `verticalLines` match the expected BD and EOL values for the active device.
 
----
-
-### Expected Outcome
-Switching devices will correctly update and display BD and EOL vertical lines on all charts. Each dataset will correctly reflect its unique indices.
+Let me know if any further adjustments are needed!
