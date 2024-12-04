@@ -1,31 +1,18 @@
-The issue likely lies in how `bd` and `eol` data are processed and how the annotations are applied to graphs other than `rulChart`. Here’s how you can resolve the problem:
+Let's address both issues:
 
-### Issues to Address:
-1. **Global Indices for `bd` and `eol`**:
-   - The indices for `bd` and `eol` are being calculated for each graph but might not be shared correctly across all graphs.
+1. **Too Many Circles**: 
+   - The issue of multiple circles is likely caused by the plugin using every `bd` and `eol` value instead of just the **first occurrence**. We will restrict the annotation to only the first non-zero `bd` and `eol` index.
 
-2. **Incorrect Annotation Logic**:
-   - The logic for identifying `bd` and `eol` points may not consider multiple events properly.
-
-3. **Plugin Duplication**:
-   - You are reusing the `circleAnnotationPlugin` across charts without adapting it for each chart's dataset.
+2. **Missing BD/EOL on Switching Devices**:
+   - The issue arises because the `bd` and `eol` indices are not being recalculated properly for each dataset when switching devices. This can be resolved by ensuring that the logic to calculate `bd` and `eol` indices runs dynamically for the selected device.
 
 ---
 
-### Fixes:
+### Updated Code
 
-#### 1. Extract `bd` and `eol` Indices for Each Dataset
-Instead of calculating the indices globally, calculate them per chart based on the dataset.
+#### Annotation Plugin (Fixing Too Many Circles)
 
-#### 2. Pass Event Indices as Chart Data
-Store the event indices (`bd` and `eol`) as part of the chart data to make them accessible during rendering.
-
----
-
-### Updated Code:
-
-#### Refactored Annotation Plugin:
-Create a reusable annotation plugin that dynamically adapts to the chart’s dataset.
+Update the plugin to only display the **first `bd` and `eol` indices**:
 
 ```javascript
 const annotationPlugin = {
@@ -35,14 +22,14 @@ const annotationPlugin = {
         const xScale = chart.scales.x;
         const yScale = chart.scales.y;
 
-        // Retrieve indices for BD and EOL from chart data
-        const bdIndices = chart.data.bdIndices || [];
-        const eolIndices = chart.data.eolIndices || [];
+        // Retrieve first indices for BD and EOL from chart data
+        const bdIndex = chart.data.bdIndex || null;
+        const eolIndex = chart.data.eolIndex || null;
 
-        // Draw circles for BD points
-        bdIndices.forEach(index => {
-            const xPixel = xScale.getPixelForValue(chart.data.labels[index]);
-            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[index]);
+        // Draw the circle for BD (if it exists)
+        if (bdIndex !== null) {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[bdIndex]);
 
             ctx.save();
             ctx.beginPath();
@@ -51,12 +38,12 @@ const annotationPlugin = {
             ctx.strokeStyle = 'green';
             ctx.stroke();
             ctx.restore();
-        });
+        }
 
-        // Draw circles for EOL points
-        eolIndices.forEach(index => {
-            const xPixel = xScale.getPixelForValue(chart.data.labels[index]);
-            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[index]);
+        // Draw the circle for EOL (if it exists)
+        if (eolIndex !== null) {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[eolIndex]);
 
             ctx.save();
             ctx.beginPath();
@@ -65,19 +52,23 @@ const annotationPlugin = {
             ctx.strokeStyle = 'red';
             ctx.stroke();
             ctx.restore();
-        });
+        }
     }
 };
 ```
 
 ---
 
-#### Example Chart Setup:
+#### Reusable Chart Creation
 
-For each chart, calculate the `bd` and `eol` indices and pass them to the `chart.data`.
+Update the chart creation logic to calculate the **first `bd` and `eol` indices** dynamically for each dataset:
 
 ```javascript
-function createChart(ctx, data, label, borderColor, indices) {
+function createChart(ctx, data, label, borderColor) {
+    // Find the first indices for BD and EOL
+    const bdIndex = data.bd.findIndex(value => value !== 0);
+    const eolIndex = data.eol.findIndex(value => value !== 0);
+
     return new Chart(ctx, {
         type: 'line',
         data: {
@@ -90,8 +81,8 @@ function createChart(ctx, data, label, borderColor, indices) {
                 fill: false,
                 pointRadius: 0
             }],
-            bdIndices: indices.bdIndices, // Pass BD indices
-            eolIndices: indices.eolIndices // Pass EOL indices
+            bdIndex: bdIndex !== -1 ? bdIndex : null, // Pass first BD index
+            eolIndex: eolIndex !== -1 ? eolIndex : null // Pass first EOL index
         },
         options: {
             responsive: true,
@@ -111,7 +102,9 @@ function createChart(ctx, data, label, borderColor, indices) {
 
 ---
 
-#### Function to Create Each Chart:
+#### Chart Update Functions
+
+Ensure each chart recalculates its `bd` and `eol` indices when switching devices:
 
 ```javascript
 function updateChart(data, chartRef, ctxId, label, color) {
@@ -119,19 +112,9 @@ function updateChart(data, chartRef, ctxId, label, color) {
 
     if (chartRef) chartRef.destroy();
 
-    // Calculate BD and EOL indices
-    const bdIndices = data.bd
-        .map((value, index) => (value !== 0 ? index : null))
-        .filter(index => index !== null);
-
-    const eolIndices = data.eol
-        .map((value, index) => (value !== 0 ? index : null))
-        .filter(index => index !== null);
-
-    return createChart(ctx, data, label, color, { bdIndices, eolIndices });
+    return createChart(ctx, data, label, color);
 }
 
-// Update specific charts
 function updateRulChart(data) {
     rulChart = updateChart(data, rulChart, 'rulChart', 'RUL', 'rgb(255, 165, 0)');
 }
@@ -147,16 +130,42 @@ function updateFDChart(data) {
 
 ---
 
-### How It Works:
-1. **Annotation Plugin**:
-   - Dynamically draws `bd` and `eol` points based on indices passed in the chart’s data.
+#### Switching Devices
 
-2. **Reusable Chart Creation**:
-   - Simplifies chart setup with a function that handles annotations for any dataset.
+When switching devices, make sure to recalculate indices and update all graphs:
 
-3. **Dynamic Indices**:
-   - Calculates indices for each dataset (`bd` and `eol`) and attaches them to the chart.
+```javascript
+function showGraphsForDevice(device) {
+    // Fetch and update data for all four graphs
+    fetch(`/data/${device}/voltageData.csv`)
+        .then(response => response.json())
+        .then(data => updateVoltageChart(data));
+
+    fetch(`/data/${device}/rulData.csv`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Data not found');
+            }
+            return response.json();
+        })
+        .then(data => {
+            updateRulChart(data);  // RUL Chart
+            updateSoHChart(data);  // SoH Chart
+            updateFDChart(data);   // FD Chart
+        })
+        .catch(error => console.error('Error loading data:', error));
+}
+```
 
 ---
 
-Let me know if additional refinements are needed!
+### How It Solves the Issues:
+1. **Only First BD/EOL**:
+   - The plugin now limits the annotations to the **first non-zero `bd` and `eol` values**.
+
+2. **Proper BD/EOL on Switch**:
+   - Each chart dynamically recalculates and uses the correct indices for the dataset of the selected device.
+
+---
+
+Let me know if there are additional refinements you'd like!
