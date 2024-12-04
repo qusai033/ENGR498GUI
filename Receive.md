@@ -1,122 +1,162 @@
-The issue seems to be related to how the chart canvas dimensions are recalculated during resizing, particularly when reducing the size of the window. Chart.js may not be updating properly due to how resizing is handled or how parent container dimensions are propagated to the charts.
+The issue likely lies in how `bd` and `eol` data are processed and how the annotations are applied to graphs other than `rulChart`. Here’s how you can resolve the problem:
 
-Here's a refined approach to resolve the problem:
+### Issues to Address:
+1. **Global Indices for `bd` and `eol`**:
+   - The indices for `bd` and `eol` are being calculated for each graph but might not be shared correctly across all graphs.
 
----
+2. **Incorrect Annotation Logic**:
+   - The logic for identifying `bd` and `eol` points may not consider multiple events properly.
 
-### Adjust Chart.js Resizing Logic
-
-1. **Ensure Parent Container Adjusts Dynamically:**
-   Update the parent container's CSS to always reflect the resized dimensions.
-
-2. **Force Chart Resize on Window Resizing:**
-   Explicitly trigger a `resize()` for all charts when the window size changes.
+3. **Plugin Duplication**:
+   - You are reusing the `circleAnnotationPlugin` across charts without adapting it for each chart's dataset.
 
 ---
 
-### Updated JavaScript Logic
-Modify the `adjustCharts` function to handle resizing dynamically for each chart:
+### Fixes:
+
+#### 1. Extract `bd` and `eol` Indices for Each Dataset
+Instead of calculating the indices globally, calculate them per chart based on the dataset.
+
+#### 2. Pass Event Indices as Chart Data
+Store the event indices (`bd` and `eol`) as part of the chart data to make them accessible during rendering.
+
+---
+
+### Updated Code:
+
+#### Refactored Annotation Plugin:
+Create a reusable annotation plugin that dynamically adapts to the chart’s dataset.
 
 ```javascript
-function adjustCharts() {
-    const charts = [voltageChart, rulChart, sohChart, fdChart];
-    charts.forEach(chart => {
-        if (chart) {
-            chart.resize(); // Force resize
-        }
-    });
-}
+const annotationPlugin = {
+    id: 'dynamicAnnotationPlugin',
+    beforeDraw: (chart) => {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
 
-// Attach resize event listener
-window.addEventListener('resize', () => {
-    adjustCharts();
-});
-```
+        // Retrieve indices for BD and EOL from chart data
+        const bdIndices = chart.data.bdIndices || [];
+        const eolIndices = chart.data.eolIndices || [];
 
----
+        // Draw circles for BD points
+        bdIndices.forEach(index => {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[index]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[index]);
 
-### Chart.js Configuration
-Ensure `responsive: true` and use `maintainAspectRatio: true` (default behavior):
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'green';
+            ctx.stroke();
+            ctx.restore();
+        });
 
-```javascript
-const commonOptions = {
-    responsive: true,
-    maintainAspectRatio: true, // Keep default behavior
-    scales: {
-        x: { title: { display: true, text: 'Time [AU]' } },
-        y: { title: { display: true, text: 'Value' } }
-    },
-    plugins: {
-        legend: { display: true, position: 'top' },
-        zoom: {
-            pan: { enabled: true, mode: 'xy' },
-            zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'xy' }
-        }
+        // Draw circles for EOL points
+        eolIndices.forEach(index => {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[index]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[index]);
+
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+            ctx.restore();
+        });
     }
 };
 ```
 
 ---
 
-### CSS Adjustments
-Ensure `.graph` and `.graphs-grid` containers adapt dynamically.
+#### Example Chart Setup:
 
-```css
-.graphs-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr; /* Two columns */
-    grid-template-rows: auto auto; /* Two rows */
-    grid-gap: 20px; /* Space between graphs */
-    padding: 20px;
-    background-color: #f0f8ff;
-    height: auto;
-    max-height: calc(100vh - 100px); /* Allow charts to scale */
-    width: 100%;
-}
+For each chart, calculate the `bd` and `eol` indices and pass them to the `chart.data`.
 
-.graph {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background-color: #cfe2f3;
-    border: 1px solid #000;
-    height: auto;
-    width: 100%;
-    max-height: 50vh; /* Constrain to viewport height */
-}
-
-.graph canvas {
-    width: 100%;
-    height: auto; /* Dynamically adjust */
-}
-
-/* Responsive Behavior */
-@media screen and (max-width: 1024px) {
-    .graphs-grid {
-        grid-template-columns: 1fr; /* Switch to single column */
-        grid-gap: 10px;
-    }
+```javascript
+function createChart(ctx, data, label, borderColor, indices) {
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time, // X-axis labels
+            datasets: [{
+                label: label,
+                data: data[label.toLowerCase()], // Y-axis data
+                borderColor: borderColor,
+                tension: 0.1,
+                fill: false,
+                pointRadius: 0
+            }],
+            bdIndices: indices.bdIndices, // Pass BD indices
+            eolIndices: indices.eolIndices // Pass EOL indices
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                x: { title: { display: true, text: 'Time [AU]' } },
+                y: { title: { display: true, text: `${label} [AU]` } }
+            },
+            plugins: {
+                zoom: zoomOptions
+            }
+        },
+        plugins: [annotationPlugin]
+    });
 }
 ```
 
 ---
 
-### Expected Behavior
-- **When resizing the window horizontally or vertically:** 
-  - The graphs will adjust proportionally and maintain aspect ratios.
-  - Dynamic resizing will be handled seamlessly using the `adjustCharts` function.
-  
-- **Responsive Breakpoints:**
-  - At smaller widths, the grid will switch to a single-column layout.
+#### Function to Create Each Chart:
+
+```javascript
+function updateChart(data, chartRef, ctxId, label, color) {
+    const ctx = document.getElementById(ctxId).getContext('2d');
+
+    if (chartRef) chartRef.destroy();
+
+    // Calculate BD and EOL indices
+    const bdIndices = data.bd
+        .map((value, index) => (value !== 0 ? index : null))
+        .filter(index => index !== null);
+
+    const eolIndices = data.eol
+        .map((value, index) => (value !== 0 ? index : null))
+        .filter(index => index !== null);
+
+    return createChart(ctx, data, label, color, { bdIndices, eolIndices });
+}
+
+// Update specific charts
+function updateRulChart(data) {
+    rulChart = updateChart(data, rulChart, 'rulChart', 'RUL', 'rgb(255, 165, 0)');
+}
+
+function updateSoHChart(data) {
+    sohChart = updateChart(data, sohChart, 'sohChart', 'SoH', 'rgb(153, 102, 255)');
+}
+
+function updateFDChart(data) {
+    fdChart = updateChart(data, fdChart, 'fdChart', 'FD', 'rgb(255, 51, 135)');
+}
+```
 
 ---
 
-### Troubleshooting
-If resizing still doesn't behave as expected:
-1. **Inspect Parent Dimensions:** Ensure the parent container is resizing correctly.
-2. **Debug with `console.log`:** Log container and canvas dimensions during resizing:
-   ```javascript
-   console.log('Parent dimensions:', container.offsetWidth, container.offsetHeight);
-   ```
-3. **Recheck the Resize Event:** Ensure it triggers as expected when the window size changes.
+### How It Works:
+1. **Annotation Plugin**:
+   - Dynamically draws `bd` and `eol` points based on indices passed in the chart’s data.
+
+2. **Reusable Chart Creation**:
+   - Simplifies chart setup with a function that handles annotations for any dataset.
+
+3. **Dynamic Indices**:
+   - Calculates indices for each dataset (`bd` and `eol`) and attaches them to the chart.
+
+---
+
+Let me know if additional refinements are needed!
