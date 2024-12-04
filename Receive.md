@@ -1,6 +1,83 @@
-Let's refine the `updateFDChart` function to incorporate the same level of robustness and consistency as discussed earlier. Here's the updated version:
+If the indices for the vertical lines (`bdIndex` and `eolIndex`) are being calculated incorrectly but the correct `x` values are set in the `verticalLines`, it suggests that the issue is with how the `verticalLinePlugin` is interpreting and rendering the lines. Let's debug and fix this.
 
-### Updated `updateFDChart`
+### Problem Analysis
+1. **Indices Misalignment**: The indices (`bdIndex` and `eolIndex`) are being calculated incorrectly as 11 and 61.
+2. **Correct `x` Values**: The `verticalLines` are being updated with the correct `x` values (128 and 255).
+3. **Lines Not Rendering**: Despite the correct `x` values, the lines are not showing.
+
+---
+
+### Solution: Debugging and Fixing the Vertical Lines
+1. **Ensure `x` Values Are Correct**:
+   - Log the `verticalLines` right before the plugin executes.
+   - Confirm that the `x` values for BD and EOL are properly assigned.
+
+2. **Refactor `verticalLinePlugin`**:
+   - Ensure the plugin correctly translates `x` values to pixel positions.
+   - Add fallback mechanisms in case of missing `x` values.
+
+3. **Check Chart Context (`chart.scales`)**:
+   - Verify that `xScale` and `yScale` are properly initialized when the plugin runs.
+
+Here’s the updated `verticalLinePlugin`:
+
+---
+
+### Updated `verticalLinePlugin`
+
+```javascript
+const verticalLinePlugin = {
+    id: 'verticalLinePlugin',
+    beforeDraw: (chart) => {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+
+        if (!xScale || !yScale) {
+            console.warn("Scales not initialized. Cannot draw vertical lines.");
+            return;
+        }
+
+        verticalLines.forEach(line => {
+            if (!line.visible || line.x === null) {
+                console.log("Skipping line:", line);
+                return; // Skip if not visible or `x` is null
+            }
+
+            const xPixel = xScale.getPixelForValue(line.x);
+
+            if (!xPixel) {
+                console.warn("Invalid xPixel for line:", line);
+                return; // Skip invalid pixel calculations
+            }
+
+            // Draw vertical line
+            ctx.save();
+            ctx.setLineDash([5, 5]); // Dashed line
+            ctx.beginPath();
+            ctx.moveTo(xPixel, yScale.top); // Top of the chart
+            ctx.lineTo(xPixel, yScale.bottom); // Bottom of the chart
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = line.color;
+            ctx.stroke();
+            ctx.restore();
+
+            // Add label
+            ctx.setLineDash([]); // Reset dash for label
+            ctx.font = '12px Arial';
+            ctx.fillStyle = line.color;
+            ctx.textAlign = 'center';
+            ctx.fillText(line.label, xPixel, yScale.top - 10); // Label above line
+        });
+    }
+};
+```
+
+---
+
+### Fix for FD Indices (`updateFDChart`)
+
+Here’s the corrected `updateFDChart` function to ensure `verticalLines` updates and the plugin draws the lines correctly:
 
 ```javascript
 function updateFDChart(data, bdIndex, eolIndex) {
@@ -8,27 +85,11 @@ function updateFDChart(data, bdIndex, eolIndex) {
 
     if (fdChart) fdChart.destroy();
 
-    // Ensure vertical lines are reset before updating
-    verticalLines[0].x = null;
-    verticalLines[1].x = null;
+    // Ensure vertical lines are updated with correct `x` values
+    if (eolIndex >= 0) verticalLines[0].x = data.time[eolIndex];
+    if (bdIndex >= 0) verticalLines[1].x = data.time[bdIndex];
 
-    // Clean BD and EOL arrays for robustness
-    const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
-    const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
-
-    console.log("Clean BD Array for FD:", cleanBd);
-    console.log("Clean EOL Array for FD:", cleanEol);
-
-    // Dynamically find the BD and EOL indices
-    const fdBdIndex = cleanBd.findIndex(value => value !== 0);
-    const fdEolIndex = cleanEol.findIndex(value => value !== 0);
-
-    console.log("FD BD Index:", fdBdIndex, "FD EOL Index:", fdEolIndex);
-
-    if (fdBdIndex >= 0) verticalLines[1].x = data.time[fdBdIndex]; // Update BD line
-    if (fdEolIndex >= 0) verticalLines[0].x = data.time[fdEolIndex]; // Update EOL line
-
-    console.log("Updated Vertical Lines for FD:", verticalLines);
+    console.log("Updated Vertical Lines for FD Chart:", verticalLines);
 
     fdChart = new Chart(ctx, {
         type: 'line',
@@ -40,16 +101,7 @@ function updateFDChart(data, bdIndex, eolIndex) {
                 borderColor: 'rgb(255, 51, 135)',
                 tension: 0.1,
                 fill: false,
-                pointRadius: 0,
-                pointBackgroundColor: (context) => {
-                    if (context.dataIndex === fdEolIndex) return 'red';
-                    if (context.dataIndex === fdBdIndex) return 'green';
-                    return 'transparent'; 
-                },
-                pointBorderWidth: (context) => {
-                    if (context.dataIndex === fdEolIndex || context.dataIndex === fdBdIndex) return 1;
-                    return 1;
-                }
+                pointRadius: 0
             }]
         },
         options: {
@@ -63,40 +115,7 @@ function updateFDChart(data, bdIndex, eolIndex) {
                 zoom: zoomOptions
             }
         },
-        plugins: [
-            {
-                id: 'verticalLinePlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
-
-                    verticalLines.forEach(line => {
-                        if (!line.visible || line.x === null) return;
-
-                        const xPixel = xScale.getPixelForValue(line.x);
-
-                        // Draw vertical line
-                        ctx.save();
-                        ctx.setLineDash([5, 5]);
-                        ctx.beginPath();
-                        ctx.moveTo(xPixel, yScale.top);
-                        ctx.lineTo(xPixel, yScale.bottom);
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = line.color;
-                        ctx.stroke();
-
-                        // Add label
-                        ctx.setLineDash([]);
-                        ctx.font = '12px Arial';
-                        ctx.fillStyle = line.color;
-                        ctx.textAlign = 'center';
-                        ctx.fillText(line.label, xPixel, yScale.top - 10);
-                        ctx.restore();
-                    });
-                }
-            }
-        ]
+        plugins: [verticalLinePlugin]
     });
 
     adjustCharts(); // Adjust size dynamically after creation
@@ -105,35 +124,33 @@ function updateFDChart(data, bdIndex, eolIndex) {
 
 ---
 
-### Key Improvements
+### Debugging Steps
+1. **Log `verticalLines`**:
+   - Ensure they have the correct `x` values before drawing.
 
-1. **Clean Data**:
-   - Ensures BD and EOL arrays (`data.bd` and `data.eol`) are sanitized to remove `NaN` values and unexpected types.
+   ```javascript
+   console.log("Vertical Lines:", verticalLines);
+   ```
 
-2. **Dynamic Indices**:
-   - Dynamically calculates `fdBdIndex` and `fdEolIndex` using cleaned data.
+2. **Verify Plugin Execution**:
+   - Confirm the plugin runs for the correct chart and `xScale`/`yScale` are valid.
 
-3. **Vertical Lines Reset**:
-   - Clears `verticalLines` before updating, ensuring no residual states.
+   ```javascript
+   console.log("xScale Min:", xScale.min, "xScale Max:", xScale.max);
+   ```
 
-4. **Detailed Logs**:
-   - Logs cleaned arrays and indices for debugging.
+3. **Check BD/EOL Indices**:
+   - Confirm the `bdIndex` and `eolIndex` are calculated correctly from the data.
 
-5. **Consistent Plugin Behavior**:
-   - Ensures the `verticalLinePlugin` reflects the updated `verticalLines`.
+   ```javascript
+   console.log("FD BD Index:", bdIndex, "FD EOL Index:", eolIndex);
+   ```
 
 ---
 
-### Testing Steps
+### Expected Behavior
+1. Correct vertical lines appear for each device's data.
+2. Lines update correctly when switching devices.
+3. The chart plugin properly scales and aligns lines with the data.
 
-1. Ensure the `data` fed to `updateFDChart` has the correct structure, including:
-   - `data.fd`
-   - `data.bd`
-   - `data.eol`
-   - `data.time`
-
-2. Debugging:
-   - Check the logs for `Clean BD Array`, `Clean EOL Array`, and `Updated Vertical Lines for FD`.
-   - Verify the `verticalLines` match the expected BD and EOL values for the active device.
-
-Let me know if any further adjustments are needed!
+If issues persist, let me know what values are logged, and I’ll help further refine the implementation!
