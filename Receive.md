@@ -1,155 +1,120 @@
-If the vertical lines still don’t appear despite the correct `x` values being assigned to `verticalLines`, it’s likely that there’s an issue in how the plugin processes the `x` values or how the chart handles the plugin lifecycle.
+To generate the output node for your results file, you can include logic in the script that writes the node definition dynamically based on the data in the input file and the computed \( \Delta t \). Below is the updated Python script:
 
-Let’s systematically refine the logic:
+### Updated Python Script with Node Definition
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
 
----
+# Load your voltage decay data
+file_path = "voltage_decay.csv"  # Replace with your file name
+data = pd.read_csv(file_path)
 
-### Updated Debugging and Fix
+# Check if the required column is present
+if "Time" not in data.columns:
+    raise ValueError("The input file must contain a 'Time' column.")
 
-#### 1. **Ensure `verticalLines` Is Correctly Updated**
-- Before rendering, log the `verticalLines` to verify it has the right `x` values for each device.
-  
-  ```javascript
-  console.log("Final Vertical Lines Before Rendering:", verticalLines);
-  ```
+# Compute delta t (time differences)
+data['Delta T'] = data['Time'].diff()  # Difference between consecutive times
 
-#### 2. **Validate `xScale.getPixelForValue()`**
-- If the `x` values from `verticalLines` are correct, the issue might be with how `getPixelForValue()` calculates the pixel position. Log its output:
+# Replace NaN in the first row with 0.0 (since there's no previous sample for the first row)
+data['Delta T'].fillna(0.0, inplace=True)
 
-  ```javascript
-  const xPixel = xScale.getPixelForValue(line.x);
-  console.log("Pixel Position for Line:", xPixel, "for x:", line.x);
-  ```
+# Add a Sample column for indexing (1-based indexing)
+data['Sample'] = data.index + 1
 
----
+# Verify if Delta T is increasing
+increasing = all(data['Delta T'][1:] >= data['Delta T'][:-1])
+if increasing:
+    print("Delta T values are increasing as expected.")
+else:
+    print("Delta T values are NOT increasing. Please verify the input data.")
 
-### Final Plugin Update
-This version includes enhanced validation and fallback handling to ensure that even if one part fails, it logs useful information:
+# Plot Sample vs Delta T to visualize the curve
+plt.figure(figsize=(10, 6))
+plt.plot(data['Sample'], data['Delta T'], marker='o', label='Delta T Curve')
+plt.title('Sample vs Delta T')
+plt.xlabel('Sample')
+plt.ylabel('Delta T')
+plt.grid()
+plt.legend()
+plt.show()
 
-```javascript
-const verticalLinePlugin = {
-    id: 'verticalLinePlugin',
-    beforeDraw: (chart) => {
-        const ctx = chart.ctx;
-        const xScale = chart.scales.x;
-        const yScale = chart.scales.y;
+# Save the result to a new CSV file
+output_file = "sample_vs_delta_t.csv"
+data[['Sample', 'Delta T']].to_csv(output_file, index=False)
 
-        if (!xScale || !yScale) {
-            console.warn("Scales not initialized. Cannot draw vertical lines.");
-            return;
-        }
+print(f"Sample vs Delta T data saved to: {output_file}")
 
-        verticalLines.forEach(line => {
-            if (!line.visible || line.x === null) {
-                console.log("Skipping line:", line);
-                return; // Skip if not visible or `x` is null
-            }
+# Generate the Node Definition
+node_definition = f"""
+% NODE_VOLTAGE_DECAY: Generated Node for Voltage Decay
+%** Feature Data: FD = FDZ*(dP/P)^FDNV + DC + NOISE
+FDNM = 1.0; % F: Noise margin - % of FDZ: 0.0 to 25.0
+FDC = {data['Delta T'].max():.2f}; % F: Nominal DC Feature Data (FD)value: positive
+FDZ = {data['Delta T'].mean():.2f}; % F: Nominal AC Feature Data (FD)value: positive
+FDCPTS = 0; % I: # data points to average for FDZ: up to 25
+FDPTS = 5; % I: # data points to average for FD: up to 5
+FDNV = 1.0; % F: n value     
+%** Prognostic Information
+FFPFAIL = 70.0; % F: Failure margin - percent above nominal
+PITTFF = 500.0; % F: Default RUL = TTFF value
+PIFFSMOD = 2; % I: 1=Convex, 2=Linear, 3=Concave, 
+%                         4=convex-concave, 5=concave-convex, 6=convex-concave 
+%** File Dependent Parameters
+INFILE = 'sample_vs_delta_t'; % S: In filename, _OUT appended for output
+INTYPE = '.csv';     % S: .txt or csv Input file type
+OUTTYPE = '.csv';    % also .txt Output file type 
+%**
+ENDDEF = -9;     % end of node definition
+"""
 
-            const xPixel = xScale.getPixelForValue(line.x);
+# Save the Node Definition to a File
+node_file = "node_definition.txt"
+with open(node_file, "w") as f:
+    f.write(node_definition)
 
-            if (isNaN(xPixel) || xPixel === undefined) {
-                console.warn("Invalid xPixel for line:", line, "xScale domain:", xScale.min, "-", xScale.max);
-                return; // Skip invalid pixel calculations
-            }
-
-            // Draw vertical line
-            ctx.save();
-            ctx.setLineDash([5, 5]); // Dashed line
-            ctx.beginPath();
-            ctx.moveTo(xPixel, yScale.top); // Top of the chart
-            ctx.lineTo(xPixel, yScale.bottom); // Bottom of the chart
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = line.color;
-            ctx.stroke();
-            ctx.restore();
-
-            // Add label
-            ctx.setLineDash([]); // Reset dash for label
-            ctx.font = '12px Arial';
-            ctx.fillStyle = line.color;
-            ctx.textAlign = 'center';
-            ctx.fillText(line.label, xPixel, yScale.top - 10); // Label above line
-        });
-    }
-};
+print(f"Node definition saved to: {node_file}")
 ```
 
----
+### Explanation of Key Updates
+1. **Node Definition Logic**:
+   - `FDC` (Nominal Feature Data): Set to the maximum value of \( \Delta t \).
+   - `FDZ` (Nominal AC Feature Data): Set to the mean value of \( \Delta t \).
+   - Other fields like `FDNM`, `FDNV`, and `FDPTS` are set to standard values, which you can modify based on your system requirements.
 
-### Revised `updateFDChart` with Vertical Line Debugging
+2. **Dynamic Node Writing**:
+   - The script writes a dynamic node definition to `node_definition.txt` based on the computed values of \( \Delta t \).
 
-This ensures `verticalLines` is updated correctly and logs any potential issues:
+3. **Outputs**:
+   - The script generates two outputs:
+     - `sample_vs_delta_t.csv`: A CSV file with `Sample` and `Delta T` columns.
+     - `node_definition.txt`: A text file with the dynamically created node definition.
 
-```javascript
-function updateFDChart(data, bdIndex, eolIndex) {
-    const ctx = document.getElementById('fdChart').getContext('2d');
+### Example Node Definition
+For the provided \( \Delta t \) data, the script might generate something like this:
 
-    if (fdChart) fdChart.destroy();
-
-    // Ensure vertical lines are updated with correct `x` values
-    verticalLines[0].x = eolIndex >= 0 ? data.time[eolIndex] : null;
-    verticalLines[1].x = bdIndex >= 0 ? data.time[bdIndex] : null;
-
-    console.log("Updated Vertical Lines for FD Chart:", verticalLines);
-
-    fdChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [{
-                label: 'Feature Data (FD)',
-                data: data.fd,
-                borderColor: 'rgb(255, 51, 135)',
-                tension: 0.1,
-                fill: false,
-                pointRadius: 0
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'FD [AU]' } }
-            },
-            plugins: {
-                zoom: zoomOptions
-            }
-        },
-        plugins: [verticalLinePlugin]
-    });
-
-    adjustCharts(); // Adjust size dynamically after creation
-}
+```text
+% NODE_VOLTAGE_DECAY: Generated Node for Voltage Decay
+%** Feature Data: FD = FDZ*(dP/P)^FDNV + DC + NOISE
+FDNM = 1.0; % F: Noise margin - % of FDZ: 0.0 to 25.0
+FDC = 4.00; % F: Nominal DC Feature Data (FD)value: positive
+FDZ = 2.50; % F: Nominal AC Feature Data (FD)value: positive
+FDCPTS = 0; % I: # data points to average for FDZ: up to 25
+FDPTS = 5; % I: # data points to average for FD: up to 5
+FDNV = 1.0; % F: n value     
+%** Prognostic Information
+FFPFAIL = 70.0; % F: Failure margin - percent above nominal
+PITTFF = 500.0; % F: Default RUL = TTFF value
+PIFFSMOD = 2; % I: 1=Convex, 2=Linear, 3=Concave, 
+%                         4=convex-concave, 5=concave-convex, 6=convex-concave 
+%** File Dependent Parameters
+INFILE = 'sample_vs_delta_t'; % S: In filename, _OUT appended for output
+INTYPE = '.csv';     % S: .txt or csv Input file type
+OUTTYPE = '.csv';    % also .txt Output file type 
+%**
+ENDDEF = -9;     % end of node definition
 ```
 
----
-
-### Additional Debugging Steps
-1. **Inspect `eolIndex` and `bdIndex`:**
-   Log the indices directly before assigning `verticalLines`:
-   ```javascript
-   console.log("EOL Index:", eolIndex, "BD Index:", bdIndex);
-   ```
-
-2. **Check `xScale` Min and Max:**
-   If the `x` values fall outside the `xScale` range, they won’t render.
-   ```javascript
-   console.log("xScale Min:", xScale.min, "xScale Max:", xScale.max);
-   ```
-
-3. **Device Switching:**
-   Ensure `verticalLines` resets properly when switching devices.
-
-   ```javascript
-   console.log("Device Switched. Resetting Vertical Lines:", verticalLines);
-   ```
-
----
-
-### Key Expectations:
-- The plugin will now validate all critical operations (`x` values, pixel calculations, scale domains).
-- Proper logging will highlight whether the issue is with data, scaling, or rendering.
-- Vertical lines should appear consistently for all devices with valid data.
-
-If issues persist, please share the logged outputs for `verticalLines`, `eolIndex`, `bdIndex`, and `xScale`. This will help refine the logic further.
+### Adjustments
+- You can adjust the logic for `FDC`, `FDZ`, and other parameters to better align with your specific requirements or constraints.
+- If additional computations are needed for \( \Delta t \), modify the computation logic accordingly.
