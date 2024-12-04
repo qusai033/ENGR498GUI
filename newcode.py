@@ -1,531 +1,81 @@
-let voltageChart = null;  // Declare chart globally so it can be destroyed later
-let rulChart = null;  // Declare a global variable for the RUL (health) chart
-let allDevices = [];  // Store the list of all devices for filtering
-let sohChart = null;
-let fdChart = null;
-let verticalLines = [
-    { x: null, label: 'End of Life', visible: true, color: 'red'},
-    { x: null, label: 'Beginging of Degradation', visible: true, color: 'green'}
-];
-
-
-function zoomStatus(chart) {
-    return chart.scales.x.min + ' - ' + chart.scales.x.max;
-}
-
-function panStatus() {
-    return 'Enabled';
-}
-// Define zoom options separately
-const zoomOptions = {
-    limits: {
-      x: { min: -200, max: 200, minRange: 50 },
-      y: { min: -200, max: 200, minRange: 50 }
-    },
-    pan: {
-      enabled: true,
-      mode: 'xy'
-    },
-    zoom: {
-      wheel: { enabled: true },
-      pinch: { enabled: true },
-      mode: 'xy',
-      onZoomComplete({ chart }) {
-        chart.update('none');  // Update chart to reflect zoom level
-      }
-    }
-  };
-  
-function resetZoom() {
-    if (voltageChart) {
-        voltageChart.resetZoom();
-    }
-    if (rulChart) {
-        rulChart.resetZoom();
-    }
-    if (sohChart) {
-        sohChart.resetZoom();
-    }
-    if (fdChart) {
-        fdChart.resetZoom();
-    }
-}
-
-// Function to load all devices from the server
-function loadDevices() {
-    fetch('/list_devices')
-        .then(response => response.json())
-        .then(devices => {
-            allDevices = devices; // Store the list of all devices for filtering
-            displayDevices(devices); // Display the full list of devices initially
-        })
-        .catch(error => console.error('Error loading devices:', error));
-}
-
-
-function showGraphsForDevice(device) {
-    console.log("Switching to Device:", device);
-
-
-    fetch(`/data/${device}/voltageData.csv`)
-        .then(response => response.json())
-        .then(data => updateVoltageChart(data))
-        .catch(error => console.error('Error loading voltage data:', error));
-
-    fetch(`/data/${device}/rulData.csv`)
-        .then(response => response.json())
-        .then(data => {
-            console.log("Fetched Data for Device:", device);
-        
-            // Debugging raw data
-            console.log("Raw BD Array:", data.bd);
-            console.log("Raw EOL Array:", data.eol);
-            console.log("Raw Time Array:", data.time);
-
-
-                    // Clear old states
-            verticalLines[0].x = null; // Clear EOL
-            verticalLines[1].x = null; // Clear BD
-
-            
-            // Convert and clean arrays
-        // Clean and convert data
-            const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
-            const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
-
-
-            console.log("Clean BD Array:", cleanBd);
-            console.log("Clean EOL Array:", cleanEol);
-
-            // Find indices dynamically
-            const bdIndex = cleanBd.findIndex(value => value !== 0);
-            const eolIndex = cleanEol.findIndex(value => value !== 0);
-
-            console.log("BD Index:", bdIndex, "EOL Index:", eolIndex);
-
-            if (bdIndex < 0 || eolIndex < 0) {
-                console.warn("BD or EOL not found in the current dataset.");
-                return;
-            }
-
-            // Update vertical lines
-            verticalLines[1].x = data.time[bdIndex]; // BD line
-            verticalLines[0].x = data.time[eolIndex]; // EOL line
-
-            console.log("Updated Vertical Lines:", verticalLines);
-
-
-            // Update charts
-            updateRulChart(data, bdIndex, eolIndex);
-            updateSoHChart(data, bdIndex, eolIndex);
-            updateFDChart(data, bdIndex, eolIndex);
-        })
-        .catch(error => console.error('Error loading RUL data:', error));
-}
-
-
-const annotationPlugin = {
-    id: 'dynamicAnnotationPlugin',
-    beforeDraw: (chart) => {
-        const ctx = chart.ctx;
-        const xScale = chart.scales.x;
-        const yScale = chart.scales.y;
-
-        const bdIndex = chart.data.bdIndex;
-        const eolIndex = chart.data.eolIndex;
-
-        if (bdIndex !== null && bdIndex >= 0) {
-            const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
-            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[bdIndex]);
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = 'green';
-            ctx.stroke();
-            ctx.restore();
-        }
-
-        if (eolIndex !== null && eolIndex >= 0) {
-            const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
-            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[eolIndex]);
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-            ctx.lineWidth = 2;
-            ctx.strokeStyle = 'red';
-            ctx.stroke();
-            ctx.restore();
-        }
-    }
-};
-
-// Update the RUL chart with JSON data (no need to parse with parseData)
-function updateRulChart(data, bdIndex, eolIndex) {
-    const ctx = document.getElementById('rulChart').getContext('2d');
-
-    if (rulChart) rulChart.destroy();
-
-    //const bdIndex = data.bd.findIndex(value => value !== 0);
-    //const eolIndex = data.eol.findIndex(value => value !== 0);
-
-    rulChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [
-                {
-                    label: 'Remaining Useful Life (RUL)',
-                    data: data.rul,
-                    borderColor: 'rgb(255, 165, 0)',
-                    tension: 0.1,
-                    fill: false,
-                    pointRadius: 0
-                },
-                {
-                    label: 'Prognostic Health (PH)',
-                    data: data.ph,
-                    borderColor: 'rgb(0, 150, 136)',
-                    tension: 0.1,
-                    fill: false,
-                    pointRadius: 0
-                }
-            ],
-            bdIndex: bdIndex,
-            eolIndex: eolIndex
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'RUL/PH [AU]' } }
-            },
-            plugins: {
-                zoom: zoomOptions
-            }
-        },
-        plugins: [{
-            id: 'dynamicAnnotationPlugin',
-            beforeDraw: (chart) => {
-                const ctx = chart.ctx;
-                const xScale = chart.scales.x;
-                const yScale = chart.scales.y;
-        
-                const bdIndex = chart.data.bdIndex;
-                const eolIndex = chart.data.eolIndex;
-        
-                if (bdIndex !== null && bdIndex >= 0) {
-                    const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
-                    const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[bdIndex]);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'green';
-                    ctx.stroke();
-                    ctx.restore();
-                }
-        
-                if (eolIndex !== null && eolIndex >= 0) {
-                    const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
-                    const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[eolIndex]);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'red';
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            }
-        },
-        {
-            id: 'dynamicAnnotationPlugin',
-            beforeDraw: (chart) => {
-                const ctx = chart.ctx;
-                const xScale = chart.scales.x;
-                const yScale = chart.scales.y;
-        
-                const bdIndex = chart.data.bdIndex;
-                const eolIndex = chart.data.eolIndex;
-        
-                if (bdIndex !== null && bdIndex >= 0) {
-                    const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
-                    const yPixel = yScale.getPixelForValue(chart.data.datasets[1].data[bdIndex]);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'green';
-                    ctx.stroke();
-                    ctx.restore();
-                }
-        
-                if (eolIndex !== null && eolIndex >= 0) {
-                    const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
-                    const yPixel = yScale.getPixelForValue(chart.data.datasets[1].data[eolIndex]);
-                    ctx.save();
-                    ctx.beginPath();
-                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-                    ctx.lineWidth = 2;
-                    ctx.strokeStyle = 'red';
-                    ctx.stroke();
-                    ctx.restore();
-                }
-            }
-        }]
-    });
-}
-
-
-function updateSoHChart(data, bdIndex, eolIndex) {
-    const ctx = document.getElementById('sohChart').getContext('2d');
-
-    if (sohChart) sohChart.destroy();
-
-    //const bdIndex = data.bd.findIndex(value => value !== 0);
-    //const eolIndex = data.eol.findIndex(value => value !== 0);
-
-    sohChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [{
-                label: 'State-of-Health (SoH)',
-                data: data.soh,
-                borderColor: 'rgb(153, 102, 255)',
-                tension: 0.1,
-                fill: false,
-                pointRadius: 0
-            }],
-            bdIndex: bdIndex,
-            eolIndex: eolIndex
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'SoH [%]' } }
-            },
-            plugins: {
-                zoom: zoomOptions
-            }
-        },
-        plugins: [annotationPlugin]
-    });
-}
-
-
-function updateFDChart(data, bdIndex, eolIndex) {
-    //console.log("FD Data:", data.fd);
-    const ctx = document.getElementById('fdChart').getContext('2d');
-
-    if (fdChart) fdChart.destroy();
-
-            // Find the indices for BD and EOL in the RUL data
-    //const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
-    //const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
-
-    verticalLines[0].x = data.time[data.eol.findIndex(value => value !== 0)];
-    verticalLines[1].x = data.time[data.bd.findIndex(value => value !== 0)]; // Get the corresponding x-axis value
-
-    fdChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time, // Replace with appropriate data
-            datasets: [{
-                label: 'Feature Data (FD)',
-                data: data.fd, // Replace with appropriate data
-                borderColor: 'rgb(255, 51, 135)',
-                tension: 0.1,
-                fill: false,
-                pointRadius: 0,
-                pointBackgroundColor: (context) => {
-                    // Change color for specific points
-                    if (context.dataIndex === eolIndex) return 'red';
-                    if (context.dataIndex === bdIndex) return 'green';
-                    return 'transparent'; // Default no color
-                },
-                pointBackgroundColor: 'transparent',
-                pointBorderWidth: (context) => {
-                    // Thicker border for EOL and BD
-                    if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 1;
-                    return 1;
-                }
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: 'FD [AU]' } }
-            },
-            plugins: {
-                zoom: zoomOptions
-            }
-        },
-        plugins: [
-            {
-                id: 'verticalLinePlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
-
-                    verticalLines.forEach(line => {
-                        if (!line.visible || line.x === null) return; // Skip if not visible or x is null
-
-                        // Get the pixel position of the vertical line on the x-axis
-                        const xPixel = xScale.getPixelForValue(line.x);
-
-                        // Draw the vertical line
-                        ctx.save();
-                        ctx.setLineDash([5, 5]); //5px dash line
-                        ctx.beginPath();
-                        ctx.moveTo(xPixel, yScale.top); // Start from the top of the y-axis
-                        ctx.lineTo(xPixel, yScale.bottom); // Extend to the bottom of the y-axis
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = line.color; // Line color and opacity
-                        ctx.stroke();
-
-                        // Draw the label for the vertical line
-                        ctx.setLineDash([]); //reset line dash for text
-                        ctx.font = '12px Arial';
-                        ctx.fillStyle = line.color;
-                        ctx.textAlign = 'center';
-                        ctx.fillText(line.label, xPixel, yScale.top - 10); // Label position slightly above the line
-                        ctx.restore();
-                    });
-                }
-            }
-        ]
-    });
-    adjustCharts(); // Adjust size dynamically after creation
-}
-
-
-// Update the voltage chart with the fetched data
-function updateVoltageChart(data) {
-    const ctx = document.getElementById('voltageChart').getContext('2d');
-
-    if (voltageChart) voltageChart.destroy();
-
-
-    voltageChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: data.time,
-            datasets: [{
-                label: 'Voltage Decay',
-                data: data.voltage,
-                borderColor: 'rgb(0, 204, 204)',
-                tension: 0.1,
-                fill: false,
-                pointRadius: 0,
-                pointBackgroundColor: 'transparent',
-                pointBorderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            scales: {
-                x: { title: { display: true, text: 'Time (MS)' } },
-                y: { title: { display: true, text: 'Voltage (V)' } }
-            },
-            plugins: {
-                zoom: zoomOptions
-            }
-        }
-    });
-    adjustCharts(); // Adjust size dynamically after creation
-}
-
-
-
-function parseCsvData(data) {
-    const lines = data.split('\n');
-    const headers = lines[0].split(',');
-    const result = {};
-
-    // Initialize result arrays for each column
-    headers.forEach(header => result[header] = []);
-
-    // Populate result arrays
-    lines.slice(1).forEach(line => {
-        const values = line.split(',');
-        headers.forEach((header, index) => {
-            if (values[index]) {
-                result[header].push(parseFloat(values[index]));
-            }
-        });
-    });
-
-    return result;  // Return an object with arrays for each column
-}
-
-
-// Function to display the filtered devices in the dropdown
-function displayDevices(devices) {
-    const deviceList = document.getElementById('searchResults');
-    deviceList.innerHTML = '';  // Clear the existing list
-
-    devices.forEach(device => {
-        const div = document.createElement('div');
-        div.textContent = device;
-        div.classList.add('device-item');
-        div.onclick = function() {
-            showGraphsForDevice(device); // Load graphs when clicking on a device
-        };
-        deviceList.appendChild(div);
-    });
-
-    document.querySelector('.search-results').style.display = devices.length ? 'block' : 'none'; // Show or hide dropdown
-}
-
-
-// Function to toggle visibility of a specific vertical line
-function toggleVerticalLine(index) {
-    if (verticalLines[index]) {
-        verticalLines[index].visible = !verticalLines[index].visible; // Toggle visibility
-        fdChart.update(); // Update the chart to reflect the change
-    }
-}
-
-
-// Function to filter devices based on search input
-function filterDevices() {
-    const query = document.getElementById('deviceSearch').value.toLowerCase();
-    const filteredDevices = allDevices.filter(device => device.toLowerCase().includes(query));
-    displayDevices(filteredDevices); // Display the filtered devices
-}
-
-
-
-
-function sendRequest(action) {
-    fetch(`http://192.168.0.158${action}`, { method: 'GET' })
-        .then(response => response.text())
-        .then(data => console.log('Response from Arduino:', data))
-        .catch(error => console.error('Error:', error));
-}
-
-function adjustCharts() {
-    const charts = [voltageChart, rulChart, sohChart, fdChart];
-    charts.forEach(chart => {
-        if (chart) {
-            chart.resize(); // Force resize
-        }
-    });
-}
-
-// Attach resize event listener
-window.addEventListener('resize', () => {
-    adjustCharts();
-});
-
-// Load devices on page load
-window.onload = loadDevices;
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load your voltage decay data
+file_path = "voltage_decay.csv"  # Replace with your file name
+data = pd.read_csv(file_path)
+
+# Ensure the required columns are present
+if "Time" not in data.columns or "Voltage" not in data.columns:
+    raise ValueError("The input file must contain 'Time' and 'Voltage' columns.")
+
+# Sort data by Time if not already sorted
+data = data.sort_values(by="Time").reset_index(drop=True)
+
+# Calculate delta t (time differences)
+data['Delta T'] = data['Time'].diff()  # Difference between consecutive times
+
+# Fill missing or negative values in Delta T
+data['Delta T'].fillna(0.0, inplace=True)
+data['Delta T'] = data['Delta T'].clip(lower=0)  # Ensure no negative delta T
+
+# Add a Sample column for indexing (1-based indexing)
+data['Sample'] = data.index + 1
+
+# Calculate cumulative change in voltage to inspect for non-monotonic behavior
+data['Cumulative Voltage Change'] = data['Voltage'].diff().cumsum().fillna(0)
+
+# Check if Delta T is monotonically increasing
+delta_t_values = data['Delta T'].to_numpy()
+increasing = all(delta_t_values[1:] >= delta_t_values[:-1])  # Compare consecutive values
+
+if increasing:
+    print("Delta T values are increasing as expected.")
+else:
+    print("Delta T values are NOT strictly increasing. Consider reviewing the data.")
+
+# Plot Sample vs Delta T to visualize the curve
+plt.figure(figsize=(12, 8))
+plt.plot(data['Sample'], data['Delta T'], marker='o', label='Delta T Curve')
+plt.title('Sample vs Delta T')
+plt.xlabel('Sample')
+plt.ylabel('Delta T')
+plt.grid()
+plt.legend()
+plt.show()
+
+# Save the result to a new CSV file
+output_file = "sample_vs_delta_t.csv"
+data[['Sample', 'Delta T']].to_csv(output_file, index=False)
+
+print(f"Sample vs Delta T data saved to: {output_file}")
+
+# Generate the Node Definition dynamically based on data insights
+node_definition = f"""
+% NODE_VOLTAGE_DECAY: Generated Node for Voltage Decay
+%** Feature Data: FD = FDZ*(dP/P)^FDNV + DC + NOISE
+FDNM = 1.0; % F: Noise margin - % of FDZ: 0.0 to 25.0
+FDC = {data['Delta T'].max():.2f}; % F: Nominal DC Feature Data (FD)value: positive
+FDZ = {data['Delta T'].mean():.2f}; % F: Nominal AC Feature Data (FD)value: positive
+FDCPTS = 0; % I: # data points to average for FDZ: up to 25
+FDPTS = 5; % I: # data points to average for FD: up to 5
+FDNV = 1.0; % F: n value     
+%** Prognostic Information
+FFPFAIL = 70.0; % F: Failure margin - percent above nominal
+PITTFF = 500.0; % F: Default RUL = TTFF value
+PIFFSMOD = 2; % I: 1=Convex, 2=Linear, 3=Concave, 
+%                         4=convex-concave, 5=concave-convex, 6=convex-concave 
+%** File Dependent Parameters
+INFILE = 'sample_vs_delta_t'; % S: In filename, _OUT appended for output
+INTYPE = '.csv';     % S: .txt or csv Input file type
+OUTTYPE = '.csv';    % also .txt Output file type 
+%**
+ENDDEF = -9;     % end of node definition
+"""
+
+# Save the Node Definition to a File
+node_file = "node_definition.txt"
+with open(node_file, "w") as f:
+    f.write(node_definition)
+
+print(f"Node definition saved to: {node_file}")
