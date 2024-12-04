@@ -1,29 +1,30 @@
-If the indices for the vertical lines (`bdIndex` and `eolIndex`) are being calculated incorrectly but the correct `x` values are set in the `verticalLines`, it suggests that the issue is with how the `verticalLinePlugin` is interpreting and rendering the lines. Let's debug and fix this.
+If the vertical lines still don’t appear despite the correct `x` values being assigned to `verticalLines`, it’s likely that there’s an issue in how the plugin processes the `x` values or how the chart handles the plugin lifecycle.
 
-### Problem Analysis
-1. **Indices Misalignment**: The indices (`bdIndex` and `eolIndex`) are being calculated incorrectly as 11 and 61.
-2. **Correct `x` Values**: The `verticalLines` are being updated with the correct `x` values (128 and 255).
-3. **Lines Not Rendering**: Despite the correct `x` values, the lines are not showing.
+Let’s systematically refine the logic:
 
 ---
 
-### Solution: Debugging and Fixing the Vertical Lines
-1. **Ensure `x` Values Are Correct**:
-   - Log the `verticalLines` right before the plugin executes.
-   - Confirm that the `x` values for BD and EOL are properly assigned.
+### Updated Debugging and Fix
 
-2. **Refactor `verticalLinePlugin`**:
-   - Ensure the plugin correctly translates `x` values to pixel positions.
-   - Add fallback mechanisms in case of missing `x` values.
+#### 1. **Ensure `verticalLines` Is Correctly Updated**
+- Before rendering, log the `verticalLines` to verify it has the right `x` values for each device.
+  
+  ```javascript
+  console.log("Final Vertical Lines Before Rendering:", verticalLines);
+  ```
 
-3. **Check Chart Context (`chart.scales`)**:
-   - Verify that `xScale` and `yScale` are properly initialized when the plugin runs.
+#### 2. **Validate `xScale.getPixelForValue()`**
+- If the `x` values from `verticalLines` are correct, the issue might be with how `getPixelForValue()` calculates the pixel position. Log its output:
 
-Here’s the updated `verticalLinePlugin`:
+  ```javascript
+  const xPixel = xScale.getPixelForValue(line.x);
+  console.log("Pixel Position for Line:", xPixel, "for x:", line.x);
+  ```
 
 ---
 
-### Updated `verticalLinePlugin`
+### Final Plugin Update
+This version includes enhanced validation and fallback handling to ensure that even if one part fails, it logs useful information:
 
 ```javascript
 const verticalLinePlugin = {
@@ -46,8 +47,8 @@ const verticalLinePlugin = {
 
             const xPixel = xScale.getPixelForValue(line.x);
 
-            if (!xPixel) {
-                console.warn("Invalid xPixel for line:", line);
+            if (isNaN(xPixel) || xPixel === undefined) {
+                console.warn("Invalid xPixel for line:", line, "xScale domain:", xScale.min, "-", xScale.max);
                 return; // Skip invalid pixel calculations
             }
 
@@ -75,9 +76,9 @@ const verticalLinePlugin = {
 
 ---
 
-### Fix for FD Indices (`updateFDChart`)
+### Revised `updateFDChart` with Vertical Line Debugging
 
-Here’s the corrected `updateFDChart` function to ensure `verticalLines` updates and the plugin draws the lines correctly:
+This ensures `verticalLines` is updated correctly and logs any potential issues:
 
 ```javascript
 function updateFDChart(data, bdIndex, eolIndex) {
@@ -86,8 +87,8 @@ function updateFDChart(data, bdIndex, eolIndex) {
     if (fdChart) fdChart.destroy();
 
     // Ensure vertical lines are updated with correct `x` values
-    if (eolIndex >= 0) verticalLines[0].x = data.time[eolIndex];
-    if (bdIndex >= 0) verticalLines[1].x = data.time[bdIndex];
+    verticalLines[0].x = eolIndex >= 0 ? data.time[eolIndex] : null;
+    verticalLines[1].x = bdIndex >= 0 ? data.time[bdIndex] : null;
 
     console.log("Updated Vertical Lines for FD Chart:", verticalLines);
 
@@ -124,33 +125,31 @@ function updateFDChart(data, bdIndex, eolIndex) {
 
 ---
 
-### Debugging Steps
-1. **Log `verticalLines`**:
-   - Ensure they have the correct `x` values before drawing.
-
+### Additional Debugging Steps
+1. **Inspect `eolIndex` and `bdIndex`:**
+   Log the indices directly before assigning `verticalLines`:
    ```javascript
-   console.log("Vertical Lines:", verticalLines);
+   console.log("EOL Index:", eolIndex, "BD Index:", bdIndex);
    ```
 
-2. **Verify Plugin Execution**:
-   - Confirm the plugin runs for the correct chart and `xScale`/`yScale` are valid.
-
+2. **Check `xScale` Min and Max:**
+   If the `x` values fall outside the `xScale` range, they won’t render.
    ```javascript
    console.log("xScale Min:", xScale.min, "xScale Max:", xScale.max);
    ```
 
-3. **Check BD/EOL Indices**:
-   - Confirm the `bdIndex` and `eolIndex` are calculated correctly from the data.
+3. **Device Switching:**
+   Ensure `verticalLines` resets properly when switching devices.
 
    ```javascript
-   console.log("FD BD Index:", bdIndex, "FD EOL Index:", eolIndex);
+   console.log("Device Switched. Resetting Vertical Lines:", verticalLines);
    ```
 
 ---
 
-### Expected Behavior
-1. Correct vertical lines appear for each device's data.
-2. Lines update correctly when switching devices.
-3. The chart plugin properly scales and aligns lines with the data.
+### Key Expectations:
+- The plugin will now validate all critical operations (`x` values, pixel calculations, scale domains).
+- Proper logging will highlight whether the issue is with data, scaling, or rendering.
+- Vertical lines should appear consistently for all devices with valid data.
 
-If issues persist, let me know what values are logged, and I’ll help further refine the implementation!
+If issues persist, please share the logged outputs for `verticalLines`, `eolIndex`, `bdIndex`, and `xScale`. This will help refine the logic further.
