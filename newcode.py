@@ -62,96 +62,137 @@ function loadDevices() {
         .catch(error => console.error('Error loading devices:', error));
 }
 
+
 function showGraphsForDevice(device) {
-    // Fetch and update data for all four graphs
+    console.log("Switching to Device:", device);
+
+
     fetch(`/data/${device}/voltageData.csv`)
         .then(response => response.json())
-        .then(data => updateVoltageChart(data));
+        .then(data => updateVoltageChart(data))
+        .catch(error => console.error('Error loading voltage data:', error));
 
     fetch(`/data/${device}/rulData.csv`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Data not found');
-            }
-            return response.json();
-        })
+        .then(response => response.json())
         .then(data => {
-            console.log("Fetched Data:", data);  // Debug fetched data
+            console.log("Fetched Data for Device:", device);
+        
+            // Debugging raw data
+            console.log("Raw BD Array:", data.bd);
+            console.log("Raw EOL Array:", data.eol);
+            console.log("Raw Time Array:", data.time);
 
-            // Update all charts
-            updateRulChart(data);  // RUL Chart
-            updateSoHChart(data);  // SoH Chart
-            updateFDChart(data);   // FD Chart
+
+                    // Clear old states
+            verticalLines[0].x = null; // Clear EOL
+            verticalLines[1].x = null; // Clear BD
+
+            
+            // Convert and clean arrays
+        // Clean and convert data
+            const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
+            const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
+
+
+            console.log("Clean BD Array:", cleanBd);
+            console.log("Clean EOL Array:", cleanEol);
+
+            // Find indices dynamically
+            const bdIndex = cleanBd.findIndex(value => value !== 0);
+            const eolIndex = cleanEol.findIndex(value => value !== 0);
+
+            console.log("BD Index:", bdIndex, "EOL Index:", eolIndex);
+
+            if (bdIndex < 0 || eolIndex < 0) {
+                console.warn("BD or EOL not found in the current dataset.");
+                return;
+            }
+
+            // Update vertical lines
+            verticalLines[1].x = data.time[bdIndex]; // BD line
+            verticalLines[0].x = data.time[eolIndex]; // EOL line
+
+            console.log("Updated Vertical Lines:", verticalLines);
+
+
+            // Update charts
+            updateRulChart(data, bdIndex, eolIndex);
+            updateSoHChart(data, bdIndex, eolIndex);
+            updateFDChart(data, bdIndex, eolIndex);
         })
-        .catch(error => console.error('Error loading data:', error));
-
+        .catch(error => console.error('Error loading RUL data:', error));
 }
 
+
+const annotationPlugin = {
+    id: 'dynamicAnnotationPlugin',
+    beforeDraw: (chart) => {
+        const ctx = chart.ctx;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+
+        const bdIndex = chart.data.bdIndex;
+        const eolIndex = chart.data.eolIndex;
+
+        if (bdIndex !== null && bdIndex >= 0) {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[bdIndex]);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'green';
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        if (eolIndex !== null && eolIndex >= 0) {
+            const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
+            const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[eolIndex]);
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = 'red';
+            ctx.stroke();
+            ctx.restore();
+        }
+    }
+};
+
 // Update the RUL chart with JSON data (no need to parse with parseData)
-function updateRulChart(data) {
+function updateRulChart(data, bdIndex, eolIndex) {
     const ctx = document.getElementById('rulChart').getContext('2d');
 
     if (rulChart) rulChart.destroy();
 
-    // Find the indices for BD and EOL in the RUL data
-    const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
-    const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
+    //const bdIndex = data.bd.findIndex(value => value !== 0);
+    //const eolIndex = data.eol.findIndex(value => value !== 0);
 
     rulChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.time,
-            datasets: [{
-                label: 'Remaining Useful Life (RUL)',
-                data: data.rul,
-                borderColor: 'rgb(255, 165, 0)',
-                tension: 0.1,
-                fill: false,
-                pointRadius: (context) => {
-                    // Highlight specific points with a larger radius
-                    if (context.dataIndex === eolIndex) return 0; // Larger for EOL
-                    if (context.dataIndex === bdIndex) return 0; // Larger for BD
-                    return 0; // Default size
+            datasets: [
+                {
+                    label: 'Remaining Useful Life (RUL)',
+                    data: data.rul,
+                    borderColor: 'rgb(255, 165, 0)',
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0
                 },
-                pointBackgroundColor: (context) => {
-                    // Change color for specific points
-                    if (context.dataIndex === eolIndex) return 'red';
-                    if (context.dataIndex === bdIndex) return 'green';
-                    return 'transparent'; // Default no color
-                },
-                pointBackgroundColor: 'transparent',
-                pointBorderWidth: (context) => {
-                    // Thicker border for EOL and BD
-                    if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 1;
-                    return 1;
+                {
+                    label: 'Prognostic Health (PH)',
+                    data: data.ph,
+                    borderColor: 'rgb(0, 150, 136)',
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0
                 }
-            },
-            {
-            label: 'Prognostic (PH)',
-            data: data.ph,
-            borderColor: 'rgb(0, 150, 136)',
-            tension: 0.1,
-            fill: false,
-            pointRadius: (context) => {
-                // Highlight specific points with a larger radius
-                if (context.dataIndex === eolIndex) return 0; // Larger for EOL
-                if (context.dataIndex === bdIndex) return 0; // Larger for BD
-                return 0; // Default size
-            },
-            pointBackgroundColor: (context) => {
-                // Change color for specific points
-                if (context.dataIndex === eolIndex) return 'red';
-                if (context.dataIndex === bdIndex) return 'green';
-                return 'transparent'; // Default no color
-            },
-            pointBackgroundColor: 'transparent',
-            pointBorderWidth: (context) => {
-                // Thicker border for EOL and BD
-                if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 1;
-                return 1;
-            }
-        
-            }]
+            ],
+            bdIndex: bdIndex,
+            eolIndex: eolIndex
         },
         options: {
             responsive: true,
@@ -161,131 +202,105 @@ function updateRulChart(data) {
                 y: { title: { display: true, text: 'RUL/PH [AU]' } }
             },
             plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    //text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
+                zoom: zoomOptions
+            }
+        },
+        plugins: [{
+            id: 'dynamicAnnotationPlugin',
+            beforeDraw: (chart) => {
+                const ctx = chart.ctx;
+                const xScale = chart.scales.x;
+                const yScale = chart.scales.y;
+        
+                const bdIndex = chart.data.bdIndex;
+                const eolIndex = chart.data.eolIndex;
+        
+                if (bdIndex !== null && bdIndex >= 0) {
+                    const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
+                    const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[bdIndex]);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'green';
+                    ctx.stroke();
+                    ctx.restore();
+                }
+        
+                if (eolIndex !== null && eolIndex >= 0) {
+                    const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
+                    const yPixel = yScale.getPixelForValue(chart.data.datasets[0].data[eolIndex]);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'red';
+                    ctx.stroke();
+                    ctx.restore();
                 }
             }
         },
-        plugins: [
-            {
-                id: 'circleAnnotationPlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
-
-                    // Draw circles on the corresponding data points
-                    if (bdIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[bdIndex]);
-                        const yPixel = yScale.getPixelForValue(data.rul[bdIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'green';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-
-                    if (eolIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[eolIndex]);
-                        const yPixel = yScale.getPixelForValue(data.rul[eolIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'red';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
+        {
+            id: 'dynamicAnnotationPlugin',
+            beforeDraw: (chart) => {
+                const ctx = chart.ctx;
+                const xScale = chart.scales.x;
+                const yScale = chart.scales.y;
+        
+                const bdIndex = chart.data.bdIndex;
+                const eolIndex = chart.data.eolIndex;
+        
+                if (bdIndex !== null && bdIndex >= 0) {
+                    const xPixel = xScale.getPixelForValue(chart.data.labels[bdIndex]);
+                    const yPixel = yScale.getPixelForValue(chart.data.datasets[1].data[bdIndex]);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'green';
+                    ctx.stroke();
+                    ctx.restore();
                 }
-            },
-            {
-                id: 'circleAnnotationPlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
-
-                    // Draw circles on the corresponding data points
-                    if (bdIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[bdIndex]);
-                        const yPixel = yScale.getPixelForValue(data.ph[bdIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'green';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-
-                    if (eolIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[eolIndex]);
-                        const yPixel = yScale.getPixelForValue(data.ph[eolIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'red';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
+        
+                if (eolIndex !== null && eolIndex >= 0) {
+                    const xPixel = xScale.getPixelForValue(chart.data.labels[eolIndex]);
+                    const yPixel = yScale.getPixelForValue(chart.data.datasets[1].data[eolIndex]);
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
+                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = 'red';
+                    ctx.stroke();
+                    ctx.restore();
                 }
             }
-        ]
+        }]
     });
-    adjustCharts(); // Adjust size dynamically after creation
 }
 
 
-function updateSoHChart(data) {
-    console.log("SoH Data:", data.soh);
-
+function updateSoHChart(data, bdIndex, eolIndex) {
     const ctx = document.getElementById('sohChart').getContext('2d');
 
     if (sohChart) sohChart.destroy();
 
-        // Find the indices for BD and EOL in the RUL data
-    const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
-    const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
+    //const bdIndex = data.bd.findIndex(value => value !== 0);
+    //const eolIndex = data.eol.findIndex(value => value !== 0);
 
     sohChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.time, // Replace with appropriate data
+            labels: data.time,
             datasets: [{
                 label: 'State-of-Health (SoH)',
-                data: data.soh, // Replace with appropriate data
+                data: data.soh,
                 borderColor: 'rgb(153, 102, 255)',
                 tension: 0.1,
                 fill: false,
-                pointRadius: (context) => {
-                    // Highlight specific points with a larger radius
-                    if (context.dataIndex === eolIndex) return 0; // Larger for EOL
-                    if (context.dataIndex === bdIndex) return 0; // Larger for BD
-                    return 0; // Default size
-                },
-                pointBackgroundColor: (context) => {
-                    // Change color for specific points
-                    if (context.dataIndex === eolIndex) return 'red';
-                    if (context.dataIndex === bdIndex) return 'green';
-                    return 'transparent'; // Default no color
-                },
-                pointBackgroundColor: 'transparent',
-                pointBorderWidth: (context) => {
-                    // Thicker border for EOL and BD
-                    if (context.dataIndex === eolIndex || context.dataIndex === bdIndex) return 1;
-                    return 1;
-                }
-            }]
+                pointRadius: 0
+            }],
+            bdIndex: bdIndex,
+            eolIndex: eolIndex
         },
         options: {
             responsive: true,
@@ -295,65 +310,23 @@ function updateSoHChart(data) {
                 y: { title: { display: true, text: 'SoH [%]' } }
             },
             plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    //text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
-                }
+                zoom: zoomOptions
             }
         },
-        plugins: [
-            {
-                id: 'circleAnnotationPlugin',
-                beforeDraw: (chart) => {
-                    const ctx = chart.ctx;
-                    const xScale = chart.scales.x;
-                    const yScale = chart.scales.y;
-
-                    // Draw circles on the corresponding data points
-                    if (bdIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[bdIndex]);
-                        const yPixel = yScale.getPixelForValue(data.soh[bdIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for BD
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'green';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-
-                    if (eolIndex !== -1) {
-                        const xPixel = xScale.getPixelForValue(data.time[eolIndex]);
-                        const yPixel = yScale.getPixelForValue(data.soh[eolIndex]);
-
-                        ctx.save();
-                        ctx.beginPath();
-                        ctx.arc(xPixel, yPixel, 8, 0, 2 * Math.PI); // Circle for EOL
-                        ctx.lineWidth = 2;
-                        ctx.strokeStyle = 'red';
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                }
-            }
-        ]
+        plugins: [annotationPlugin]
     });
-    adjustCharts(); // Adjust size dynamically after creation
 }
 
 
-function updateFDChart(data) {
+function updateFDChart(data, bdIndex, eolIndex) {
     //console.log("FD Data:", data.fd);
     const ctx = document.getElementById('fdChart').getContext('2d');
 
     if (fdChart) fdChart.destroy();
 
             // Find the indices for BD and EOL in the RUL data
-    const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
-    const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
+    //const bdIndex = data.bd.findIndex(value => value !== 0); // First non-zero BD
+    //const eolIndex = data.eol.findIndex(value => value !== 0); // First non-zero EOL
 
     verticalLines[0].x = data.time[data.eol.findIndex(value => value !== 0)];
     verticalLines[1].x = data.time[data.bd.findIndex(value => value !== 0)]; // Get the corresponding x-axis value
@@ -368,12 +341,7 @@ function updateFDChart(data) {
                 borderColor: 'rgb(255, 51, 135)',
                 tension: 0.1,
                 fill: false,
-                pointRadius: (context) => {
-                    // Highlight specific points with a larger radius
-                    if (context.dataIndex === eolIndex) return 0; // Larger for EOL
-                    if (context.dataIndex === bdIndex) return 0; // Larger for BD
-                    return 0; // Default size
-                },
+                pointRadius: 0,
                 pointBackgroundColor: (context) => {
                     // Change color for specific points
                     if (context.dataIndex === eolIndex) return 'red';
@@ -396,12 +364,7 @@ function updateFDChart(data) {
                 y: { title: { display: true, text: 'FD [AU]' } }
             },
             plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    //text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
-                }
+                zoom: zoomOptions
             }
         },
         plugins: [
@@ -474,12 +437,7 @@ function updateVoltageChart(data) {
                 y: { title: { display: true, text: 'Voltage (V)' } }
             },
             plugins: {
-                zoom: zoomOptions,
-                title: {
-                    display: true,
-                    position: 'bottom',
-                    //text: (ctx) => `Zoom: ${zoomStatus(ctx.chart)}, Pan: ${panStatus()}`
-                }
+                zoom: zoomOptions
             }
         }
     });
