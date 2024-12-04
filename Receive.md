@@ -1,18 +1,104 @@
-Let's address both issues:
+Let's refine the code to:
 
-1. **Too Many Circles**: 
-   - The issue of multiple circles is likely caused by the plugin using every `bd` and `eol` value instead of just the **first occurrence**. We will restrict the annotation to only the first non-zero `bd` and `eol` index.
+1. **Fix the Device Switching Issue**:
+   - Ensure the correct `bd` and `eol` indices are recalculated and displayed for each device dynamically.
+   - Properly refresh all charts and annotations when switching devices.
 
-2. **Missing BD/EOL on Switching Devices**:
-   - The issue arises because the `bd` and `eol` indices are not being recalculated properly for each dataset when switching devices. This can be resolved by ensuring that the logic to calculate `bd` and `eol` indices runs dynamically for the selected device.
+2. **Add the PH Line to the RUL Chart**:
+   - Include the PH data as a second dataset in the RUL chart.
 
 ---
 
 ### Updated Code
 
-#### Annotation Plugin (Fixing Too Many Circles)
+#### Updated RUL Chart with PH Line
+Include both RUL and PH lines in the same chart:
 
-Update the plugin to only display the **first `bd` and `eol` indices**:
+```javascript
+function updateRulChart(data) {
+    const ctx = document.getElementById('rulChart').getContext('2d');
+
+    if (rulChart) rulChart.destroy();
+
+    // Find the first indices for BD and EOL
+    const bdIndex = data.bd.findIndex(value => value !== 0);
+    const eolIndex = data.eol.findIndex(value => value !== 0);
+
+    rulChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: data.time, // X-axis labels
+            datasets: [
+                {
+                    label: 'Remaining Useful Life (RUL)',
+                    data: data.rul,
+                    borderColor: 'rgb(255, 165, 0)', // Orange for RUL
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0
+                },
+                {
+                    label: 'Prognostic Health (PH)',
+                    data: data.ph,
+                    borderColor: 'rgb(0, 150, 136)', // Teal for PH
+                    tension: 0.1,
+                    fill: false,
+                    pointRadius: 0
+                }
+            ],
+            bdIndex: bdIndex !== -1 ? bdIndex : null, // Pass first BD index
+            eolIndex: eolIndex !== -1 ? eolIndex : null // Pass first EOL index
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            scales: {
+                x: { title: { display: true, text: 'Time [AU]' } },
+                y: { title: { display: true, text: 'RUL/PH [AU]' } }
+            },
+            plugins: {
+                zoom: zoomOptions
+            }
+        },
+        plugins: [annotationPlugin] // Add the updated annotation plugin
+    });
+}
+```
+
+---
+
+#### Fixing Device Switching
+
+Ensure all charts properly refresh and display BD/EOL annotations for the selected device:
+
+```javascript
+function showGraphsForDevice(device) {
+    // Fetch and update data for all four graphs
+    fetch(`/data/${device}/voltageData.csv`)
+        .then(response => response.json())
+        .then(data => updateVoltageChart(data));
+
+    fetch(`/data/${device}/rulData.csv`)
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Data not found');
+            }
+            return response.json();
+        })
+        .then(data => {
+            updateRulChart(data);  // RUL Chart with RUL & PH lines
+            updateSoHChart(data);  // SoH Chart
+            updateFDChart(data);   // FD Chart
+        })
+        .catch(error => console.error('Error loading data:', error));
+}
+```
+
+---
+
+#### Enhanced Annotation Plugin for All Charts
+
+Ensure annotations (BD and EOL) are correctly recalculated and displayed for all charts:
 
 ```javascript
 const annotationPlugin = {
@@ -59,37 +145,41 @@ const annotationPlugin = {
 
 ---
 
-#### Reusable Chart Creation
+#### Example Usage for Other Charts
 
-Update the chart creation logic to calculate the **first `bd` and `eol` indices** dynamically for each dataset:
+The logic for adding `bdIndex` and `eolIndex` works the same for other charts (e.g., SoH and FD charts):
 
 ```javascript
-function createChart(ctx, data, label, borderColor) {
+function updateSoHChart(data) {
+    const ctx = document.getElementById('sohChart').getContext('2d');
+
+    if (sohChart) sohChart.destroy();
+
     // Find the first indices for BD and EOL
     const bdIndex = data.bd.findIndex(value => value !== 0);
     const eolIndex = data.eol.findIndex(value => value !== 0);
 
-    return new Chart(ctx, {
+    sohChart = new Chart(ctx, {
         type: 'line',
         data: {
-            labels: data.time, // X-axis labels
+            labels: data.time,
             datasets: [{
-                label: label,
-                data: data[label.toLowerCase()], // Y-axis data
-                borderColor: borderColor,
+                label: 'State-of-Health (SoH)',
+                data: data.soh,
+                borderColor: 'rgb(153, 102, 255)', // Purple for SoH
                 tension: 0.1,
                 fill: false,
                 pointRadius: 0
             }],
-            bdIndex: bdIndex !== -1 ? bdIndex : null, // Pass first BD index
-            eolIndex: eolIndex !== -1 ? eolIndex : null // Pass first EOL index
+            bdIndex: bdIndex !== -1 ? bdIndex : null,
+            eolIndex: eolIndex !== -1 ? eolIndex : null
         },
         options: {
             responsive: true,
             maintainAspectRatio: true,
             scales: {
                 x: { title: { display: true, text: 'Time [AU]' } },
-                y: { title: { display: true, text: `${label} [AU]` } }
+                y: { title: { display: true, text: 'SoH [%]' } }
             },
             plugins: {
                 zoom: zoomOptions
@@ -102,70 +192,14 @@ function createChart(ctx, data, label, borderColor) {
 
 ---
 
-#### Chart Update Functions
-
-Ensure each chart recalculates its `bd` and `eol` indices when switching devices:
-
-```javascript
-function updateChart(data, chartRef, ctxId, label, color) {
-    const ctx = document.getElementById(ctxId).getContext('2d');
-
-    if (chartRef) chartRef.destroy();
-
-    return createChart(ctx, data, label, color);
-}
-
-function updateRulChart(data) {
-    rulChart = updateChart(data, rulChart, 'rulChart', 'RUL', 'rgb(255, 165, 0)');
-}
-
-function updateSoHChart(data) {
-    sohChart = updateChart(data, sohChart, 'sohChart', 'SoH', 'rgb(153, 102, 255)');
-}
-
-function updateFDChart(data) {
-    fdChart = updateChart(data, fdChart, 'fdChart', 'FD', 'rgb(255, 51, 135)');
-}
-```
+### Summary of Changes:
+1. **Dynamic Annotations**:
+   - Updated plugin now only draws the **first BD and EOL points**.
+2. **Multi-Line Chart for RUL**:
+   - The RUL chart now includes both RUL and PH lines.
+3. **Device Switching**:
+   - All charts are updated correctly when switching devices, recalculating the BD and EOL points.
 
 ---
 
-#### Switching Devices
-
-When switching devices, make sure to recalculate indices and update all graphs:
-
-```javascript
-function showGraphsForDevice(device) {
-    // Fetch and update data for all four graphs
-    fetch(`/data/${device}/voltageData.csv`)
-        .then(response => response.json())
-        .then(data => updateVoltageChart(data));
-
-    fetch(`/data/${device}/rulData.csv`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Data not found');
-            }
-            return response.json();
-        })
-        .then(data => {
-            updateRulChart(data);  // RUL Chart
-            updateSoHChart(data);  // SoH Chart
-            updateFDChart(data);   // FD Chart
-        })
-        .catch(error => console.error('Error loading data:', error));
-}
-```
-
----
-
-### How It Solves the Issues:
-1. **Only First BD/EOL**:
-   - The plugin now limits the annotations to the **first non-zero `bd` and `eol` values**.
-
-2. **Proper BD/EOL on Switch**:
-   - Each chart dynamically recalculates and uses the correct indices for the dataset of the selected device.
-
----
-
-Let me know if there are additional refinements you'd like!
+Let me know if anything else needs tweaking!
