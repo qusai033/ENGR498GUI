@@ -1,151 +1,142 @@
-To ensure the graphs display even when the data contains all zeros or `NaN` values, you need to preprocess the data to handle these cases and update the JavaScript and server-side logic accordingly.
+Yes, the logic can be structured in the following manner to process voltage decay data, calculate delta \(T\), generate feature data (FD), and then compare it with the healthy baseline:
 
 ---
 
-### **Key Updates**
+### Workflow
+1. **Generate or Load Healthy Capacitor Data**:
+   - Use the code to create a reference baseline (healthy capacitor data with voltage decay).
+   - Store this data to later calculate deviation-based feature data.
 
-1. **Preprocess Data on the Server**:
-   - Replace all `NaN` and `-NaN` values with `0`.
-   - Ensure data arrays contain at least one valid point.
+2. **Process Incoming Voltage Decay Data**:
+   - Load any new voltage decay data (degraded or experimental data).
+   - Calculate delta \(T\) and feature data (FD) using the same approach applied to the healthy data.
 
-2. **Update JavaScript**:
-   - Modify the chart logic to handle zero-filled data gracefully.
+3. **Feature Data Comparison**:
+   - Compare feature data of incoming data to the healthy baseline to assess capacitor health.
+   - Identify deviations to determine degradation levels and prognostic metrics.
+
+4. **Node Definition**:
+   - Automatically output a node definition for ARULE for both the healthy and degraded data.
+   - Include parameters like nominal feature data (FDC), noise levels, and degradation factors based on calculated FD.
 
 ---
 
-### **Server-Side Updates**
-In your Flask server, ensure `NaN` values are replaced with `0` in the `/data/<device>/rulData.csv` endpoint:
+### Updated Python Code
+This will incorporate generating delta \(T\), feature data, and a node definition for both healthy and incoming voltage decay data.
 
 ```python
-@app.route('/data/<device>/rulData.csv', methods=['GET'])
-def get_rul_fd_soh_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="RUL data file not found.")
-    
-    try:
-        df = pd.read_csv(file_path)
-        
-        # Replace NaN and negative NaN with 0
-        df.fillna(0, inplace=True)
-        df.replace(-float('nan'), 0, inplace=True)
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
 
-        # Ensure all required columns exist
-        required_columns = ['DT', 'RUL', 'PH', 'FD', 'SOH']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            return abort(400, description=f"Missing columns: {', '.join(missing_columns)}")
-        
-        # Prepare JSON response
-        data = {
-            "time": df['DT'].tolist(),
-            "rul": df['RUL'].tolist(),
-            "ph": df['PH'].tolist(),
-            "fd": df['FD'].tolist(),
-            "eol": df['EOL'].tolist() if 'EOL' in df.columns else [0] * len(df),
-            "bd": df['BD'].tolist() if 'BD' in df.columns else [0] * len(df),
-            "soh": df['SOH'].tolist()
-        }
-        return jsonify(data)
-    except Exception as e:
-        print("Error:", e)  # Debug error
-        return jsonify({"error": str(e)}), 500
+def calculate_delta_t(data):
+    """Calculate delta T for the given voltage decay data."""
+    data['Delta T'] = data['Time'].diff()  # Time difference
+    data['Delta T'].fillna(0, inplace=True)  # Replace NaN for first value
+    return data
+
+def calculate_feature_data(data, fdz, fdc, fdnv):
+    """Calculate Feature Data (FD) using ARULE equation."""
+    voltage_diff = data['Voltage'].diff().fillna(0)
+    power_loss_ratio = voltage_diff.abs() / data['Voltage']  # |dP/P|
+    data['FD'] = fdz * (power_loss_ratio ** fdnv) + fdc
+    return data
+
+def generate_node_definition(fdz, fdc, fdnv, fdpts, pittff, ffp_fail, infile_name):
+    """Generate ARULE Node Definition."""
+    node_def = f"""
+%** Feature Data: FD = FDZ*(dP/P)^FDNV + DC + NOISE
+FDNM = 1.0; % F: Noise margin - % of FDZ: 0.0 to 25.0
+FDC = {fdc:.2f}; % F: Nominal DC Feature Data (FD) value
+FDZ = {fdz:.2f}; % F: Nominal AC Feature Data (FD) value
+FDCPTS = 0; % I: # data points to average for FDZ: up to 25
+FDPTS = {fdpts}; % I: # data points to average for FD: up to 5
+FDNV = {fdnv:.2f}; % F: n value     
+%** Prognostic Information
+FFPFAIL = {ffp_fail:.2f}; % F: Failure margin - percent above nominal
+PITTFF = {pittff:.2f}; % F: Default RUL = TTFF value
+PIFFSMOD = 2; % I: 1=Convex, 2=Linear, 3=Concave, 
+%                         4=convex-concave, 5=concave-convex, 6=convex-concave
+%** File Dependent Parameters
+INFILE = '{infile_name}'; % S: Input filename
+INTYPE = '.csv';     % S: Input file type
+%**
+ENDDEF    = -9;     % End of node definition
+"""
+    return node_def
+
+# Parameters for Feature Data
+FDZ_HEALTHY = 10.0  # Nominal FDZ value for healthy
+FDC_HEALTHY = 25.0  # Nominal FDC value for healthy
+FDNV_HEALTHY = 1.0  # Lambda or n value
+FDPTS = 5
+PITTFF = 500.0  # Time to Failure
+FFPFAIL = 70.0  # Failure margin
+
+# Load healthy capacitor data
+healthy_data = pd.read_csv('healthy_capacitor_voltage_decay.csv')
+healthy_data = calculate_delta_t(healthy_data)
+healthy_data = calculate_feature_data(healthy_data, FDZ_HEALTHY, FDC_HEALTHY, FDNV_HEALTHY)
+healthy_data[['Time', 'FD']].to_csv('healthy_fd.csv', index=False)
+
+# Generate Node Definition for Healthy Data
+healthy_node = generate_node_definition(FDZ_HEALTHY, FDC_HEALTHY, FDNV_HEALTHY, FDPTS, PITTFF, FFPFAIL, 'healthy_fd')
+with open('healthy_node.txt', 'w') as file:
+    file.write(healthy_node)
+
+# Load degraded capacitor data
+degraded_data = pd.read_csv('degraded_capacitor_voltage_decay.csv')
+degraded_data = calculate_delta_t(degraded_data)
+degraded_data = calculate_feature_data(degraded_data, FDZ_HEALTHY, FDC_HEALTHY, FDNV_HEALTHY)
+degraded_data[['Time', 'FD']].to_csv('degraded_fd.csv', index=False)
+
+# Generate Node Definition for Degraded Data
+degraded_node = generate_node_definition(FDZ_HEALTHY, FDC_HEALTHY, FDNV_HEALTHY, FDPTS, PITTFF, FFPFAIL, 'degraded_fd')
+with open('degraded_node.txt', 'w') as file:
+    file.write(degraded_node)
+
+# Plot the feature data
+plt.figure(figsize=(10, 6))
+plt.plot(healthy_data['Time'], healthy_data['FD'], label='Healthy Capacitor FD', color='green')
+plt.plot(degraded_data['Time'], degraded_data['FD'], label='Degraded Capacitor FD', color='red')
+plt.title('Feature Data Comparison: Healthy vs Degraded Capacitor')
+plt.xlabel('Time')
+plt.ylabel('Feature Data (FD)')
+plt.legend()
+plt.grid()
+plt.show()
 ```
 
 ---
 
-### **JavaScript Updates**
-In the `showGraphsForDevice` function, ensure it handles zero-filled data:
+### Key Enhancements
+1. **Delta \(T\) Calculation**:
+   - Ensures proper handling of time intervals between voltage measurements.
 
-```javascript
-function showGraphsForDevice(device) {
-    console.log("Switching to Device:", device);
+2. **Feature Data**:
+   - Leverages ARULE’s \(FD = FDZ*(dP/P)^{FDNV} + FDC + NOISE\) equation to calculate FD for each sample.
 
-    fetch(`/data/${device}/voltageData.csv`)
-        .then(response => response.json())
-        .then(data => {
-            // Ensure data arrays are non-empty
-            if (!data.time || data.time.length === 0) {
-                data.time = [0]; // Default to a single zero entry
-                data.voltage = [0]; // Default voltage value
-            }
-            updateVoltageChart(data);
-        })
-        .catch(error => console.error('Error loading voltage data:', error));
+3. **Node Definition**:
+   - Automatically generates node definitions tailored to the input data.
 
-    fetch(`/data/${device}/rulData.csv`)
-        .then(response => response.json())
-        .then(data => {
-            console.log("Fetched RUL Data for Device:", device);
-
-            // Ensure non-empty arrays and replace `-NaN` or `NaN` with `0`
-            Object.keys(data).forEach(key => {
-                if (Array.isArray(data[key])) {
-                    data[key] = data[key].map(value => isNaN(value) ? 0 : value);
-                }
-            });
-
-            // Default to zero if BD/EOL indices are missing
-            const bdIndex = data.bd.findIndex(value => value !== 0) || 0;
-            const eolIndex = data.eol.findIndex(value => value !== 0) || 0;
-
-            // Update charts
-            updateRulChart(data, bdIndex, eolIndex);
-            updateSoHChart(data, bdIndex, eolIndex);
-            updateFDChart(data, bdIndex, eolIndex);
-        })
-        .catch(error => console.error('Error loading RUL data:', error));
-}
-```
+4. **Comparison**:
+   - Plots and compares feature data (FD) for healthy and degraded capacitors to visualize degradation.
 
 ---
 
-### **Graph Behavior with Zero Data**
-Ensure charts handle zero values:
+### Outputs
+1. **Healthy Feature Data**:
+   - CSV file (`healthy_fd.csv`) containing time and FD.
 
-1. **Voltage Chart**:
-   ```javascript
-   updateVoltageChart({
-       time: [0],
-       voltage: [0]
-   });
-   ```
+2. **Degraded Feature Data**:
+   - CSV file (`degraded_fd.csv`) containing time and FD.
 
-2. **RUL Chart**:
-   ```javascript
-   updateRulChart({
-       time: [0],
-       rul: [0],
-       ph: [0],
-       eol: [0],
-       bd: [0]
-   }, 0, 0);
-   ```
+3. **Node Definitions**:
+   - `healthy_node.txt` and `degraded_node.txt` for ARULE.
 
-3. **SoH Chart**:
-   ```javascript
-   updateSoHChart({
-       time: [0],
-       soh: [0]
-   }, 0, 0);
-   ```
-
-4. **FD Chart**:
-   ```javascript
-   updateFDChart({
-       time: [0],
-       fd: [0],
-       bd: [0],
-       eol: [0]
-   }, 0, 0);
-   ```
+4. **Visualization**:
+   - Plot comparing healthy and degraded FD.
 
 ---
 
-### **Testing Zero-Data Handling**
-- Upload a file with all `0` values or introduce `NaN` values.
-- Verify that graphs still display.
-- Check if vertical lines appear correctly based on `0` or default indices.
-
-Would you like additional logic to differentiate between "valid zero data" and "missing data"?
+This approach aligns with ARULE requirements and ensures you can input meaningful feature data derived from voltage decay. Let me know if you need further refinements!
