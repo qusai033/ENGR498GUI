@@ -69,8 +69,16 @@ function showGraphsForDevice(device) {
     // Fetch Voltage Data
     fetch(`/data/${device}/voltageData.csv`)
         .then(response => response.json())
-        .then(data => updateVoltageChart(data))
+        .then(data => {
+            // Ensure data arrays are non-empty
+            if (!data.time || data.time.length === 0) {
+                data.time = [0]; // Default to a single zero entry
+                data.voltage = [0]; // Default voltage value
+            }
+            updateVoltageChart(data);
+        })
         .catch(error => console.error('Error loading voltage data:', error));
+
 
     // Fetch RUL Data
     fetch(`/data/${device}/rulData.csv`)
@@ -84,20 +92,17 @@ function showGraphsForDevice(device) {
             verticalLines[0].x = null; // Clear EOL
             verticalLines[1].x = null; // Clear BD
 
-            // Clean BD and EOL arrays
-            const cleanBd = data.bd.map(value => Number(value)).filter(value => !isNaN(value));
-            const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
+            // Ensure non-empty arrays and replace `-NaN` or `NaN` with `0`
+            Object.keys(data).forEach(key => {
+                if (Array.isArray(data[key])) {
+                    data[key] = data[key].map(value => isNaN(value) ? 0 : value);
+                }
+            });
 
+            // Default to zero if BD/EOL indices are missing
+            const bdIndex = data.bd.findIndex(value => value !== -1) || 0;
+            const eolIndex = data.eol.findIndex(value => value !== 0) || 0;
 
-            // Find BD and EOL indices
-            const bdIndex = cleanBd.findIndex(value => value !== 0);
-            const eolIndex = cleanEol.findIndex(value => value !== 0);
-
-
-            if (bdIndex < 0 || eolIndex < 0) {
-                console.warn("BD or EOL not found in the current dataset.");
-                return;
-            }
 
             // Update vertical lines with corresponding time values
             verticalLines[1].x = data.time[bdIndex]; // BD line
@@ -369,7 +374,7 @@ function updateFDChart(data, bdIndex, eolIndex) {
     const cleanEol = data.eol.map(value => Number(value)).filter(value => !isNaN(value));
 
     // Dynamically find the BD and EOL indices
-    const fdBdIndex = cleanBd.findIndex(value => value !== 0);
+    const fdBdIndex = cleanBd.findIndex(value => value !== -1);
     const fdEolIndex = cleanEol.findIndex(value => value !== 0);
 
 
@@ -450,7 +455,8 @@ function updateVoltageChart(data) {
             plugins: {
                 zoom: zoomOptions
             }
-        }
+        },
+        plugins: [annotationPlugin]
     });
     adjustCharts(); // Adjust size dynamically after creation
 }
@@ -540,199 +546,3 @@ window.addEventListener('resize', () => {
 
 // Load devices on page load
 window.onload = loadDevices;
-
-
-
-from flask import Flask, jsonify, render_template, request, abort
-import pandas as pd
-import os
-from io import StringIO
-
-
-app = Flask(__name__)
-
-
-# Path to the directory containing device folders
-DATA_DIRECTORY = '../data'  # Relative path to the data folder
-# Upload file route
-# Path to the directory containing device folders
-# Path to the directory containing device folders
-UPLOAD_DATA_DIRECTORY = './data/uploads/voltage_log'  # Update to match your directory structure
-COUNTER_FILE_DIRECTORY = './data/uploads'  # File to store the counter
-
-COUNTER_FILE = os.path.join(COUNTER_FILE_DIRECTORY, 'file_voltage_counter.txt')
-
-# Ensure directories and counter file exist
-os.makedirs(UPLOAD_DATA_DIRECTORY, exist_ok=True)
-os.makedirs(COUNTER_FILE_DIRECTORY, exist_ok=True)
-
-if not os.path.exists(COUNTER_FILE):
-    with open(COUNTER_FILE, 'w') as f:
-        f.write('0')  # Initialize the counter to 0
-
-
-# Function to get the current counter value
-def get_file_counter():
-    with open(COUNTER_FILE, 'r') as f:
-        return int(f.read().strip())
-
-
-# Function to increment and save the counter
-def increment_file_counter():
-    counter = get_file_counter() + 1
-    with open(COUNTER_FILE, 'w') as f:
-        f.write(str(counter))
-    return counter
-
-
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-
-
-@app.route('/upload', methods=['POST'])
-def upload_file():
-    try:
-        # Read raw CSV data from the request body
-        csv_data = request.data.decode('utf-8')
-        if not csv_data:
-            print("Error: No data received.")  # Debug log
-            return jsonify({"error": "No data received"}), 400
-        
-
-        # Convert CSV data into a Pandas DataFrame
-
-        csv_stream = StringIO(csv_data)
-        df = pd.read_csv(csv_stream)
-
-
-        df.columns = df.columns.str.strip()
-
-        # Ensure Time and Voltage columns are checked for duplicates
-        if 'Voltage' not in df.columns or 'Time' not in df.columns:
-            print("Error: Missing 'Time' or 'Voltage' columns.")  # Debug log
-            return jsonify({"error": "Missing 'Time' or 'Voltage' columns in CSV"}), 400
-        
-
-        original_length = len(df)
-
-
-        # Drop duplicates based on Time and Voltage
-        df = df.drop_duplicates(subset=['Voltage', 'Time'])
-
-        new_lenth = len(df)
-
-        print(f"remove {original_length - new_lenth} duplicate rows.")
-
-        # Increment the file counter and generate a unique filename
-        file_counter = increment_file_counter()
-        unique_filename = f"voltageDecay_{file_counter}.csv"
-
-        # Save the uniquely named file in the uploads directory
-        save_path = os.path.join(UPLOAD_DATA_DIRECTORY, unique_filename)
-        df.to_csv(save_path, index=False)
-
-        print(f"File saved to: {save_path}")  # Debug log
-
-
-        # Traverse `data` directory to find all `voltageData.csv` files
-        overridden_files = []
-        for root, dirs, files in os.walk(DATA_DIRECTORY):  # Recursively walk through directories
-            for file in files:
-                if file == 'voltageData.csv':  # Check for `voltageData.csv`
-                    file_path = os.path.join(root, file)
-                    
-                    # Override the file content with normalized data
-                    df.to_csv(file_path, index=False)  # Save normalized DataFrame
-                    overridden_files.append(file_path)
-                    
-
-        if not overridden_files:
-            return jsonify({"message": "No voltageData.csv files found to override."}), 404
-
-        print(f"Overridden files: {overridden_files}")  # Debug log
-        return jsonify({
-            "message": f"Overridden {len(overridden_files)} voltageData.csv files successfully.",
-            "overridden_files": overridden_files
-        }), 200
-    
-
-    except Exception as e:
-        print(f"Error processing CSV: {e}")  # Debug log
-        return jsonify({"error": f"Error processing CSV: {e}"}), 500
-
-
-
-# Endpoint to list all devices (subdirectories in the DATA_DIRECTORY)
-@app.route('/list_devices', methods=['GET'])
-def list_devices():
-    try:
-        # List all directories (devices) within the DATA_DIRECTORY
-        devices = [d for d in os.listdir(DATA_DIRECTORY) if os.path.isdir(os.path.join(DATA_DIRECTORY, d))]
-        return jsonify(devices)
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    
-
-    
-
-# Endpoint to get voltage data for a specific device
-@app.route('/data/<device>/voltageData.csv', methods=['GET'])
-def get_voltage_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'voltageData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="Voltage data file not found.")
-    
-    # Load the CSV data into a pandas DataFrame
-    df = pd.read_csv(file_path)
-    
-    # Check if the necessary columns exist in the CSV
-    if 'Time' not in df.columns or 'Voltage' not in df.columns:
-        return abort(400, description="CSV file must contain 'Time' and 'Voltage' columns.")
-    
-    # Convert the DataFrame to a dictionary suitable for JSON
-    data = {
-        "time": df['Time'].tolist(),
-        "voltage": df['Voltage'].tolist()
-    }
-    
-    return jsonify(data)
-
-@app.route('/data/<device>/rulData.csv', methods=['GET'])
-def get_rul_fd_soh_data(device):
-    file_path = os.path.join(DATA_DIRECTORY, device, 'rulData.csv')
-    
-    if not os.path.exists(file_path):
-        return abort(404, description="RUL data file not found.")
-    
-    try:
-        df = pd.read_csv(file_path)
-        
-        # Ensure all required columns exist
-        required_columns = ['DT', 'RUL', 'PH', 'FD', 'SOH']
-        missing_columns = [col for col in required_columns if col not in df.columns]
-        if missing_columns:
-            return abort(400, description=f"Missing columns: {', '.join(missing_columns)}")
-        
-        # Prepare JSON response
-        data = {
-            "time": df['DT'].tolist(),
-            "rul": df['RUL'].tolist(),
-            "ph": df['PH'].tolist(),
-            "fd": df['FD'].tolist(),
-            "eol": df['EOL'].tolist(),
-            "bd": df['BD'].tolist(),
-            "soh": df['SOH'].tolist()
-        }
-        return jsonify(data)
-    except Exception as e:
-        print("Error:", e)  # Debug error
-        return jsonify({"error": str(e)}), 500
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
-
