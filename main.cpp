@@ -1,161 +1,805 @@
+// #include <WiFiNINA.h>
+// #include <RTCZero.h>
+// #include <SPI.h>
+// #include <SD.h>         // Add the SD card library
+// #include <WiFiClient.h> // WiFiClient for HTTP POST requests
+
+// // WiFi credentials
+// const char *SSID = "TP-Link_BE10";      // Your Wi-Fi SSID
+// const char *PASSWORD = "SensorLab123$"; // Your Wi-Fi password
+
+// // Server details
+// const char *SERVER_IP = "192.168.0.69";  // IP address of your Raspberry Pi
+// const int SERVER_PORT = 5000;            // Port of your Flask server
+// const char *UPLOAD_ENDPOINT = "/upload"; // Flask upload endpoint
+
+// // Function prototypes
+// void sampleData();
+// void printToSerial();
+// void dataToString();
+// void saveToSDCard();     // Function to save data to SD card
+// void sendFileToServer(); // Function to send data file to the server
+
+// String dataString = "";
+// int readResolution = 12;
+// int analogPin = A1; // Use A1 for analog pin
+// int OutputPin = A5; // Use A5 for digital output pin
+// unsigned int sampleAmt = 499;
+// unsigned int sampleArray[499];
+// const int chipSelect = 4; // SD card chip select pin (adjust depending on your board)
+// int fileCounter = 0;      // Counter to create unique filenames
+
+// void connectWiFi()
+// {
+//   while (WiFi.status() != WL_CONNECTED)
+//   {
+//     Serial.println("Connecting to WiFi...");
+//     WiFi.begin(SSID, PASSWORD);
+//     delay(500);
+//   }
+//   Serial.println("Connected to WiFi!");
+// }
+
+// WiFiClient client;
+
+// void setup()
+// {
+//   Serial.begin(9600);
+//   while (!Serial)
+//   {
+//     ; // Wait for serial port to connect
+//   }
+
+//   connectWiFi();
+
+//   // Initialize the SD card
+//   if (!SD.begin(chipSelect))
+//   {
+//     Serial.println("SD card initialization failed!");
+//     return;
+//   }
+//   Serial.println("SD card initialized.");
+
+//   analogReference(AR_INTERNAL);
+//   analogReadResolution(readResolution);
+//   pinMode(OutputPin, OUTPUT);
+// }
+
+// void loop()
+// {
+//   sampleData();
+//   dataToString();
+//   printToSerial();
+//   saveToSDCard();     // Save the data to the SD card as a .csv file
+//   sendFileToServer(); // Send the data file to the server
+
+//   delay(10000); // Delay to avoid spamming the server, adjust as needed
+// }
+
+// void sampleData()
+// {
+//   digitalWrite(OutputPin, HIGH);
+//   delay(1000);
+//   digitalWrite(OutputPin, LOW);
+//   for (int i = 0; i < sampleAmt; i++)
+//   {
+//     sampleArray[i] = analogRead(analogPin);
+//   }
+// }
+
+// void printToSerial()
+// {
+//   for (int j = 0; j < sampleAmt; j++)
+//   {
+//     float voltage = sampleArray[j] * (3.3 / 1023.0);
+//     Serial.println(voltage);
+//   }
+// }
+
+// void dataToString()
+// {
+//   dataString = ""; // Clear the previous data
+//   // Add the header if necessary (remove this if not needed)
+//   dataString += "Voltage,Time(ms)\n";
+
+//   for (int j = 0; j < sampleAmt; j++)
+//   {
+//     float voltage = sampleArray[j] * (3.3 / 1023.0);
+//     // Format the data as CSV: voltage,time
+//     dataString += String(voltage) + "," + millis() + "\n";
+//   }
+// }
+
+// // Function to save the sampled data to the SD card as a .csv file with a unique filename
+// void saveToSDCard()
+// {
+//   // Generate a unique filename using a counter
+//   String filename = "data_" + String(fileCounter) + ".csv";
+//   fileCounter++; // Increment the counter for the next file
+
+//   // Open the file on the SD card
+//   File dataFile = SD.open(filename.c_str(), FILE_WRITE);
+
+//   if (dataFile)
+//   {                               // If it opens
+//     dataFile.println(dataString); // Write the dataString to the file
+//     dataFile.close();             // Close the file
+//     Serial.println("Data saved to SD card: " + filename);
+//   }
+//   else
+//   {
+//     Serial.println("Error opening " + filename);
+//   }
+// }
+
+// // Function to send the .csv file to the server
+// void sendFileToServer()
+// {
+//   // Generate the filename again (make sure it matches the one created in saveToSDCard)
+//   String filename = "data_" + String(fileCounter - 1) + ".csv"; // Get the last saved file
+//   File dataFile = SD.open(filename.c_str());
+
+//   if (!dataFile)
+//   {
+//     Serial.println("Failed to open file for sending");
+//     return;
+//   }
+
+//   // Calculate and send the Content-Length header
+//   unsigned long contentLength = dataFile.size(); // Get file size
+//   Serial.print("File size (Content-Length): ");
+//   Serial.println(contentLength);
+
+//   // Create the HTTP request
+//   if (client.connect(SERVER_IP, SERVER_PORT))
+//   {
+//     Serial.println("Connected to server, sending file...");
+
+//     // Send the HTTP POST request headers
+//     client.println("POST " + String(UPLOAD_ENDPOINT) + " HTTP/1.1");
+//     client.println("Host: " + String(SERVER_IP));
+//     client.println("Content-Type: text/csv");
+//     client.print("Content-Length: ");
+//     client.println(contentLength);
+//     client.println("Connection: close");
+//     client.println();
+
+//     // Send the file content in small chunks
+//     const int bufferSize = 64; // Adjust buffer size based on your memory constraints
+//     char buffer[bufferSize];
+//     while (dataFile.available())
+//     {
+//       int bytesRead = dataFile.read(buffer, bufferSize); // Read up to bufferSize bytes
+//       client.write(buffer, bytesRead);                   // Send the buffer content to the server
+//     }
+
+//     dataFile.close(); // Close the file
+//     Serial.println("File content sent");
+
+//     // Wait for the response from the server
+//     while (client.connected())
+//     {
+//       if (client.available())
+//       {
+//         String response = client.readStringUntil('\n');
+//         Serial.println("Server response: " + response);
+//       }
+//     }
+
+//     client.stop(); // Close the connection
+//     delay(1000);   // Wait before the next request
+//   }
+//   else
+//   {
+//     Serial.println("Connection to server failed");
+//   }
+// }
+
+/*--------------------------------------------------------------------------------*/
+// #include <WiFiNINA.h>
+// #include <RTCZero.h>
+// #include <SPI.h>
+// #include <SD.h>         // Add the SD card library
+// #include <WiFiClient.h> // WiFiClient for HTTP POST requests
+
+// // WiFi credentials
+// const char *SSID = "TP-Link_BE10";      // Your Wi-Fi SSID
+// const char *PASSWORD = "SensorLab123$"; // Your Wi-Fi password
+
+// // Server details
+// const char *SERVER_IP = "192.168.0.69";  // IP address of your Raspberry Pi
+// const int SERVER_PORT = 5000;            // Port of your Flask server
+// const char *UPLOAD_ENDPOINT = "/upload"; // Flask upload endpoint
+
+// // Function prototypes
+// void sampleData();
+// void dataToString();
+// void printToSerial();
+// void saveToSDCard();     // Function to save data to SD card
+// void sendFileToServer(); // Function to send data file to the server
+
+// String dataString = "";
+// int readResolution = 12;
+// int analogPin = A1; // Use A1 for analog pin
+// int OutputPin = A5; // Use A5 for digital output pin
+// unsigned int sampleAmt = 499;
+// unsigned int sampleArray[499];
+// const int chipSelect = 4; // SD card chip select pin (adjust depending on your board)
+// int fileCounter = 0;      // Counter to create unique filenames
+
+// WiFiServer server(80); // Initialize WiFi server on port 80
+
+// void connectWiFi()
+// {
+//     while (WiFi.status() != WL_CONNECTED)
+//     {
+//         Serial.println("Connecting to WiFi...");
+//         WiFi.begin(SSID, PASSWORD);
+//         delay(500);
+//     }
+//     Serial.println("Connected to WiFi!");
+// }
+
+// WiFiClient client;
+
+// void setup()
+// {
+//     Serial.begin(9600);
+//     while (!Serial)
+//     {
+//         ; // Wait for serial port to connect
+//     }
+
+//     connectWiFi();
+
+//     // Start the WiFi server
+//     server.begin();
+
+//     // Initialize the SD card
+//     if (!SD.begin(chipSelect))
+//     {
+//         Serial.println("SD card initialization failed!");
+//         return;
+//     }
+//     Serial.println("SD card initialized.");
+
+//     analogReference(AR_INTERNAL);
+//     analogReadResolution(readResolution);
+//     pinMode(OutputPin, OUTPUT);
+// }
+
+// void loop()
+// {
+//     // Check for incoming client connection
+//     WiFiClient client = server.available();
+//     if (client)
+//     {
+//         Serial.println("Client connected");
+
+//         // Read the HTTP request
+//         String request = client.readStringUntil('\r');
+//         client.flush();
+
+//         // Check for the "GET_DATA" command in the request
+//         if (request.indexOf("GET_DATA") != -1)
+//         {
+//             Serial.println("GET_DATA command received");
+
+//             // Execute data sampling, saving, and sending logic
+//             sampleData();
+//             dataToString();
+//             printToSerial();
+//             saveToSDCard();
+//             sendFileToServer();
+
+//             // Respond to the client
+//             client.println("HTTP/1.1 200 OK");
+//             client.println("Content-Type: csv/plain");
+//             client.println();
+//             client.println("Data sampling and upload complete!");
+//         }
+//         else
+//         {
+//             // Respond with a default message for other requests
+//             client.println("HTTP/1.1 400 Bad Request");
+//             client.println("Content-Type: csv/plain");
+//             client.println();
+//             client.println("Invalid command");
+//         }
+
+//         client.stop(); // Close the connection
+//         Serial.println("Client disconnected");
+//     }
+// }
+
+// // Function to sample data
+// void sampleData()
+// {
+//     digitalWrite(OutputPin, HIGH);
+//     delay(1000);
+//     digitalWrite(OutputPin, LOW);
+//     for (int i = 0; i < sampleAmt; i++)
+//     {
+//         sampleArray[i] = analogRead(analogPin);
+//     }
+// }
+
+// // Function to convert data to a CSV string
+// void dataToString()
+// {
+
+//     dataString = "";                   // Clear the previous data
+//     dataString += "Voltage,Time(s)\n"; // Add header (Time in seconds)
+
+//     unsigned long startTime = millis(); // Capture the start time
+
+//     for (int j = 0; j < sampleAmt; j++)
+//     {
+//         float voltage = sampleArray[j] * (3.3 / 1023.0);
+//         // Calculate time in seconds relative to the start time
+//         float timeInMiliSeconds = (millis() - startTime);                          /// 1000.0;
+//         dataString += String(voltage) + "," + String(timeInMiliSeconds, 3) + "\n"; // Format: voltage, time (3 decimal places)
+//     }
+// }
+
+// // Function to print data to the Serial monitor
+// void printToSerial()
+// {
+//     String line = "";
+
+//     for (int i = 0; i < dataString.length(); i++)
+//     {
+//         char c = dataString[i]; // Get each character from dataString
+
+//         if (c == '\n') // Check if it's a newline character
+//         {
+//             Serial.println(line); // Print the current line
+//             line = "";            // Reset the line for the next line
+//         }
+//         else
+//         {
+//             line += c; // Add the character to the current line
+//         }
+//     }
+
+//     // Print any remaining content (if dataString doesn't end with \n)
+//     if (line.length() > 0)
+//     {
+//         Serial.println(line);
+//     }
+// }
+
+// // Function to save the sampled data to the SD card as a .csv file
+// void saveToSDCard()
+// {
+//     String filename = "data_" + String(fileCounter) + ".csv";
+//     fileCounter++; // Increment the counter for the next file
+
+//     File dataFile = SD.open(filename.c_str(), FILE_WRITE);
+
+//     if (dataFile)
+//     {
+//         dataFile.println(dataString); // Write dataString to the file
+//         dataFile.close();
+//         Serial.println("Data saved to SD card: " + filename);
+//     }
+//     else
+//     {
+//         Serial.println("Error opening " + filename);
+//     }
+// }
+
+// // Function to send the .csv file to the server
+// void sendFileToServer()
+// {
+//     String filename = "data_" + String(fileCounter - 1) + ".csv"; // Last saved file
+//     File dataFile = SD.open(filename.c_str());
+
+//     if (!dataFile)
+//     {
+//         Serial.println("Failed to open file for sending");
+//         return;
+//     }
+
+//     unsigned long contentLength = dataFile.size(); // Get file size
+//     Serial.print("File size (Content-Length): ");
+//     Serial.println(contentLength);
+
+//     if (client.connect(SERVER_IP, SERVER_PORT))
+//     {
+//         Serial.println("Connected to server, sending file...");
+
+//         client.println("POST " + String(UPLOAD_ENDPOINT) + " HTTP/1.1");
+//         client.println("Host: " + String(SERVER_IP));
+//         client.println("Content-Type: text/csv");
+//         client.print("Content-Length: ");
+//         client.println(contentLength);
+//         client.println("Connection: close");
+//         client.println();
+
+//         const int bufferSize = 64; // Adjust buffer size based on memory constraints
+//         char buffer[bufferSize];
+//         while (dataFile.available())
+//         {
+//             int bytesRead = dataFile.read(buffer, bufferSize);
+//             client.write(buffer, bytesRead);
+//         }
+
+//         dataFile.close();
+//         Serial.println("File content sent");
+
+//         while (client.connected())
+//         {
+//             if (client.available())
+//             {
+//                 String response = client.readStringUntil('\n');
+//                 Serial.println("Server response: " + response);
+//             }
+//         }
+
+//         client.stop();
+//         delay(1000);
+//     }
+//     else
+//     {
+//         Serial.println("Connection to server failed");
+//     }
+// }
+
+//*************************
+
 #include <WiFiNINA.h>
 #include <RTCZero.h>
 #include <SPI.h>
-#include <SD.h> // Add the SD card library
+#include <SD.h>         // Add the SD card library
+#include <WiFiClient.h> // WiFiClient for HTTP POST requests
 
-#include <Arduino.h>
-#include <PubSubClient.h>
+#include <string.h>
+#include <TimeLib.h>
+#include <Wire.h>
 
-#include "config.h"
+// WiFi credentials
+const char *SSID = "TP-Link_BE10";      // Your Wi-Fi SSID
+const char *PASSWORD = "SensorLab123$"; // Your Wi-Fi password
+
+// Server details
+const char *SERVER_IP = "192.168.0.69";  // IP address of your Raspberry Pi
+const int SERVER_PORT = 5000;            // Port of your Flask server
+const char *UPLOAD_ENDPOINT = "/upload"; // Flask upload endpoint
+
+const long bleedInterval = 20000;
+unsigned long previousMillis = 0;
+unsigned long currentMillis = 0;
+
+uint8_t i = 0;
+uint8_t sampleVal = 0;
+uint8_t samplePeriod = 1; // microseconds (1us)
+uint16_t sampleAmt = 499;
+uint16_t sampleArray[499]; // Array that will contain sample data
+// uint16_t sampleArrayInverse[500]; // Array that contains the inverse of the sampla data
+uint32_t timeArray[499]; // Array that will contain the time of the sample data
+uint32_t timeStart, timeFinish, timeTotal, dataTime, epochTime;
+uint8_t sampleMinutes = 1;
+
+// String for data
+String dataString = "";
+
+// Date and Time values
+uint32_t epoch;
+
+// ts_ stands for time stamp. These are
+uint16_t ts_year;
+uint16_t ts_month;
+uint16_t ts_day;
+uint16_t ts_hour;
+uint16_t ts_minute;
+uint16_t ts_second;
+
+// Data File component to save to SD
+File dataFile;
+char fileName[13];
 
 // Function prototypes
 void sampleData();
-void printToSerial();
-void dataToString();
-void saveToSDCard(); // Function to save data to SD card
+void sampleDataToString();
+void printDataString();
+void getTime();
+void DateTimeSD(uint16_t *date, uint16_t *time);
+void saveDataSD();       // Function to save data to SD card
+void sendFileToServer(); // Function to send data file to the server
 
-String dataString = "";
+// String dataString = "";
 int readResolution = 12;
-int analogPin = A1; // Use A1 for analog pin
-int OutputPin = A5; // Use A5 for digital output pin
-unsigned int sampleAmt = 499;
-unsigned int sampleArray[499];
+int analogPin = A1;       // Use A1 for analog pin
+int OutputPin = A5;       // Use A5 for digital output pin
 const int chipSelect = 4; // SD card chip select pin (adjust depending on your board)
-int fileCounter = 0; // Counter to create unique filenames
+int fileCounter = 0;      // Counter to create unique filenames
+
+WiFiServer server(80); // Initialize WiFi server on port 80
 
 void connectWiFi()
 {
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    Serial.println("Connecting to WiFi..");
-    WiFi.begin(SSID, PASSWORD);
-    delay(500);
-  }
-
-  Serial.println("Connected!");
-}
-
-WiFiClient wifiClient;
-PubSubClient client(wifiClient);
-
-void reconnectMQTTClient()
-{
-  while (!client.connected())
-  {
-    Serial.print("Attempting MQTT connection...");
-
-    if (client.connect(CLIENT_NAME.c_str()))
+    while (WiFi.status() != WL_CONNECTED)
     {
-      Serial.println("connected");
-      client.subscribe(CLIENT_TELEMETRY_TOPIC.c_str());
+        Serial.println("Connecting to WiFi...");
+        WiFi.begin(SSID, PASSWORD);
+        delay(500);
     }
-    else
-    {
-      Serial.print("Retrying in 5 seconds - failed, rc=");
-      Serial.println(client.state());
-      delay(5000);
-    }
-  }
+    Serial.println("Connected to WiFi!");
 }
 
-void createMQTTClient()
-{
-  client.setServer(BROKER.c_str(), TCP_PORT);
-  reconnectMQTTClient();
-}
+WiFiClient client;
 
 void setup()
 {
-  Serial.begin(9600);
-  while (!Serial)
-  {
-    ;
-  }
+    Serial.begin(9600);
+    while (!Serial)
+    {
+        ; // Wait for serial port to connect
+    }
 
-  connectWiFi();
-  createMQTTClient();
+    connectWiFi();
 
-  // Initialize the SD card
-  if (!SD.begin(chipSelect))
-  {
-    Serial.println("SD card initialization failed!");
-    return;
-  }
-  Serial.println("SD card initialized.");
+    // Start the WiFi server
+    server.begin();
 
-  analogReference(AR_INTERNAL);
-  analogReadResolution(readResolution);
-  pinMode(OutputPin, OUTPUT);
+    // Initialize the SD card
+    if (!SD.begin(chipSelect))
+    {
+        Serial.println("SD card initialization failed!");
+        return;
+    }
+    Serial.println("SD card initialized.");
+
+    analogReference(AR_INTERNAL);
+    analogReadResolution(readResolution);
+    pinMode(OutputPin, OUTPUT);
 }
 
 void loop()
 {
-  reconnectMQTTClient();
-  client.loop();
+    // Check for incoming client connection
+    WiFiClient client = server.available();
+    if (client)
+    {
+        Serial.println("Client connected");
 
-  sampleData();
-  dataToString();
-  printToSerial();
-  saveToSDCard(); // Save the data to the SD card
+        // Read the HTTP request
+        String request = client.readStringUntil('\r');
+        client.flush();
 
-  for (int j = 0; j < sampleAmt; j++)
-  {
-    float voltage = sampleArray[j] * (3.3 / 4096);
-    String voltageStr = String(voltage);
-    client.publish(CLIENT_TELEMETRY_TOPIC.c_str(), voltageStr.c_str());
-  }
+        // Check for the "GET_DATA" command in the request
+        if (request.indexOf("GET_DATA") != -1)
+        {
+            Serial.println("GET_DATA command received");
 
-  exit(0); // Exiting loop, assuming you want to do this for testing purposes
+            // Execute data sampling, saving, and sending logic
+
+            sampleData();
+            sampleDataToString();
+            printDataString();
+            saveDataSD();
+
+            sendFileToServer();
+
+            // Respond to the client
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: csv/plain");
+            client.println();
+            client.println("Data sampling and upload complete!");
+        }
+        else
+        {
+            // Respond with a default message for other requests
+            client.println("HTTP/1.1 400 Bad Request");
+            client.println("Content-Type: csv/plain");
+            client.println();
+            client.println("Invalid command");
+        }
+
+        client.stop(); // Close the connection
+        Serial.println("Client disconnected");
+    }
 }
 
+// Function to sample data
 void sampleData()
+{ // This function pulses in 3.3 volts into the capactitor then samples the decaying voltage into an array, takes readings from the analog pin, and saves that data into an array
+
+    digitalWrite(OutputPin, HIGH);
+    delay(1000);
+    digitalWrite(OutputPin, LOW);
+
+    timeStart = micros();
+    for (int i = 0; i < sampleAmt; i++)
+    { // This takes the readings from the analog pin and puts it in an array
+
+        timeFinish = micros();
+        timeTotal = timeFinish - timeStart;
+        timeArray[i] = timeTotal;
+        sampleArray[i] = analogRead(analogPin);
+    }
+
+    Serial.println("data sampled.");
+}
+
+// Function to convert data to a CSV string
+void sampleDataToString()
+{ // This function parses the sample and time arrays and formats them into a string.
+
+    dataString = "";
+
+    dataString += "Voltage,Time\n"; // Add header (Time in seconds)
+
+    for (int i = 0; i < sampleAmt; i++)
+    {
+        float voltage = sampleArray[i] * (3.3 / 1023.0);
+        // float voltageInverse = 1 / voltage;
+        dataTime = timeArray[i];
+
+        dataString += voltage;
+        dataString += ",";
+        dataString += dataTime;
+        dataString += "\n";
+    }
+
+    Serial.println("data to string");
+}
+
+void printDataString()
 {
-  digitalWrite(OutputPin, HIGH);
-  delay(1000);
-  digitalWrite(OutputPin, LOW);
-  for (int i = 0; i < sampleAmt; i++)
-  {
-    sampleArray[i] = analogRead(analogPin);
-  }
+    // Ensure dataString has content before trying to print
+    if (dataString.length() == 0)
+    {
+        Serial.println("No data to print. Please generate dataString first.");
+        return;
+    }
+
+    String line = ""; // Temporary variable to store each line
+
+    // Loop through dataString and parse it line by line
+    for (int i = 0; i < dataString.length(); i++)
+    {
+        char c = dataString[i]; // Get each character
+
+        if (c == '\n') // Newline detected, print the line
+        {
+            Serial.println(line); // Print the current line
+            line = "";            // Reset for the next line
+        }
+        else
+        {
+            line += c; // Append character to the current line
+        }
+    }
+
+    // Print any remaining line if it doesn't end with a newline
+    if (line.length() > 0)
+    {
+        Serial.println(line);
+    }
 }
 
-void printToSerial()
+void getTime()
+{ // This function takes the epoch time from WiFi and then grabs the date and time from that
+
+    epochTime = WiFi.getTime();
+
+    // Adjust time to your local timezone (7 hours before GMT)
+    epochTime = epochTime - (7 * 60 * 60); // Subtract 7 hours in seconds
+
+    ts_year = year(epochTime);
+    ts_month = month(epochTime);
+    ts_day = day(epochTime);
+    ts_hour = hour(epochTime);
+    ts_minute = minute(epochTime);
+    ts_second = second(epochTime);
+
+    sprintf(fileName, "%02d%02d%02d%02d.csv", ts_month, ts_day, ts_hour, ts_minute);
+
+    Serial.println(fileName);
+}
+
+// Function to save the sampled data to the SD card as a .csv file
+void saveDataSD()
 {
-  for (int j = 0; j < sampleAmt; j++)
-  {
-    float voltage = sampleArray[j] * (3.3 / 4096);
-    Serial.println(voltage);
-  }
+    Serial.println("Entering saveDataSD...");
+
+    getTime(); // Ensure timestamp variables are set correctly
+    SdFile::dateTimeCallback(DateTimeSD);
+
+    // sprintf(fileName, "LOG%02d%02d.csv", ts_hour, ts_minute); // Use a simple filename
+    Serial.println("Generated filename: " + String(fileName));
+
+    if (dataString.length() == 0)
+    {
+        Serial.println("dataString is empty. No data to save.");
+        return;
+    }
+
+    File dataFile = SD.open(fileName, FILE_WRITE);
+    if (dataFile)
+    {
+        Serial.println("File opened successfully for writing.");
+        dataFile.println(dataString); // Write data to the file
+        dataFile.close();             // Close the file
+        Serial.println("Data saved to SD card as: " + String(fileName));
+    }
+    else
+    {
+        Serial.println("Failed to open file for writing.");
+    }
+
+    Serial.println("Exiting saveDataSD...");
 }
 
-void dataToString()
+void DateTimeSD(uint16_t *date, uint16_t *time)
+{ // This function adds a timestamp to the file that Windows will display in the file information
+
+    *date = FAT_DATE(ts_year, ts_month, ts_day);
+    *time = FAT_TIME(ts_hour, ts_minute, ts_second);
+}
+
+// Function to send the .csv file to the server
+void sendFileToServer()
 {
-  dataString = ""; // Clear the previous data
-  for (int j = 0; j < sampleAmt; j++)
-  {
-    float voltage = sampleArray[j] * (3.3 / 4096);
-    // Add unique identifier (e.g., timestamp or counter) to each entry
-    dataString += String(j) + ";" + String(voltage) + ";" + millis() + "\n"; 
-  }
+
+    File dataFile = SD.open(fileName); // Use the filename generated during saveDataSD
+
+    if (!dataFile)
+    {
+        Serial.println("Failed to open file for sending: " + String(fileName));
+        return;
+    }
+
+    unsigned long contentLength = dataFile.size(); // Get file size
+    Serial.print("File size (Content-Length): ");
+    Serial.println(contentLength);
+
+    if (client.connect(SERVER_IP, SERVER_PORT))
+    {
+        Serial.println("Connected to server, sending file...");
+
+        // HTTP POST request
+        client.println("POST " + String(UPLOAD_ENDPOINT) + " HTTP/1.1");
+        client.println("Host: " + String(SERVER_IP));
+        client.println("Content-Type: csv");
+        client.print("Content-Length: ");
+        client.println(contentLength);
+        client.println("Connection: close");
+        client.println();
+
+        // Send the file content in chunks
+        const int bufferSize = 64; // Adjust buffer size based on memory constraints
+        char buffer[bufferSize];
+        while (dataFile.available())
+        {
+            int bytesRead = dataFile.read(buffer, bufferSize);
+            client.write(buffer, bytesRead);
+            delay(10);
+        }
+
+        dataFile.close(); // Close the file after sending
+        Serial.println("File content sent");
+
+        // Read and print server response
+        while (client.connected())
+        {
+            if (client.available())
+            {
+                String response = client.readStringUntil('\n');
+                Serial.println("Server response: " + response);
+            }
+        }
+
+        client.stop(); // Close the connection
+        delay(1000);
+    }
+    else
+    {
+        Serial.println("Connection to server failed");
+    }
 }
 
-// Function to save the sampled data to the SD card with a unique filename
-void saveToSDCard(){
-  // Generate a unique filename using a counter
-  String filename = "data_" + String(fileCounter) + ".txt";
-  fileCounter++; // Increment the counter for the next file
-
-  // Open the file on the SD card
-  File dataFile = SD.open(filename.c_str(), FILE_WRITE);
-
-  if (dataFile) //if it open
-  {
-    dataFile.println(dataString); // Write the dataString to the file
-    dataFile.close(); // Close the file
-    Serial.println("Data saved to SD card: " + filename);
-  }
-  else
-  {
-    Serial.println("Error opening " + filename);
-  }
-}
+// 192.168.0.158 (Arduino)
+// 192.168.0.69  (Odyssey)
