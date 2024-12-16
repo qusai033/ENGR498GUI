@@ -1,89 +1,58 @@
-### **Poster Contents**
+### **Future Directions** Content:  
+
+**Future Directions**:  
+The field of motion capture continues to evolve, offering exciting opportunities to enhance accessibility, precision, and utility in medical and biomechanics applications. Key areas for future development include:  
+
+1. **Hybrid Systems**:  
+   - Integrating OpenCap’s markerless technology with Noraxon IMU’s precision to create systems that balance affordability and accuracy.  
+   - Such systems could provide cost-effective solutions for both remote and clinical applications.  
+
+2. **Advancements in Artificial Intelligence**:  
+   - Developing AI algorithms that improve the accuracy of markerless systems, even under challenging conditions (e.g., poor lighting or complex motions).  
+   - AI could also assist in automating motion analysis, reducing the workload for clinicians and researchers.  
+
+3. **Enhanced Mobility**:  
+   - Increasing portability of motion capture setups to extend their use to underserved or remote regions.  
+   - Wireless integration of marker-based systems for greater flexibility.  
+
+4. **Personalized Medicine**:  
+   - Using motion capture data to tailor rehabilitation and treatment plans to individual patient needs.  
+   - Real-time data integration with electronic health records for holistic patient care.  
+
+5. **Broader Applications**:  
+   - Expanding motion capture into new medical fields such as cardiology (analyzing thoracic movements) and mental health (detecting subtle motor abnormalities in conditions like Parkinson’s).  
+
+6. **Open-Source Tools and Platforms**:  
+   - Encouraging open collaboration for markerless motion capture software, enabling more researchers and clinicians to use and improve these systems.  
+
+These advancements have the potential to revolutionize motion capture, making it a cornerstone of personalized and accessible medical care.
 
 ---
 
-### **Title**
-**Motion Capture in Medicine: Comparing OpenCap and Noraxon IMU Systems**
+### **Image Titles and Suggestions**  
 
----
+Including titles for your images is a great way to guide viewers. Here are suggestions:  
 
-### **Introduction**
-Motion capture technology plays a vital role in medical and biomechanics applications, offering insights into human movement. These tools are essential for tracking rehabilitation progress, analyzing gait patterns, and evaluating athletic performance. This poster focuses on two advanced systems—**OpenCap**, a markerless solution, and **Noraxon IMU**, a marker-based wearable system. By comparing their features, benefits, and limitations, this study highlights their impact on improving medical outcomes and shaping the future of motion analysis.
+1. **System Setup Comparisons**:  
+   - **"OpenCap Setup: Markerless Motion Capture with Cameras"**  
+     Show a simple setup with cameras around a subject, highlighting the accessibility.  
 
----
+   - **"Noraxon IMU: Marker-Based Motion Capture"**  
+     Depict a person wearing IMU sensors, emphasizing precision and setup requirements.  
 
-### **OpenCap: Markerless Motion Capture**
-- **Overview**: OpenCap is a markerless motion capture system leveraging AI and depth-sensing cameras to analyze human movement. It eliminates the need for physical markers, making it cost-effective and user-friendly.  
-- **Key Features**:  
-  - Uses ordinary cameras (e.g., smartphones or webcams).  
-  - AI algorithms reconstruct 3D motion data.  
-  - Highly accessible—suitable for remote or at-home applications.  
-- **Advantages**:  
-  - Minimal setup required; no wearable sensors or dedicated lab space.  
-  - Affordable, democratizing access to motion analysis.  
-  - Enables remote physical therapy and virtual health applications.  
-- **Limitations**:  
-  - Less precise than marker-based systems for fine motor assessments.  
-  - Dependent on camera resolution and lighting conditions.  
+2. **Example Outputs**:  
+   - **"3D Motion Reconstruction: OpenCap"**  
+     Include a visual of a skeletal motion capture model reconstructed by OpenCap.  
 
----
+   - **"Kinematic Data from Noraxon IMU"**  
+     Show a graph or chart of joint angles or forces from Noraxon IMU data.  
 
-### **Noraxon IMU: Marker-Based System**
-- **Overview**: Noraxon’s IMU system uses wearable sensors placed on the body to capture motion data in real-time. This approach directly measures kinematics with high precision.  
-- **Key Features**:  
-  - Small, lightweight IMU sensors attached to key body points.  
-  - High accuracy and consistent data collection.  
-  - Provides real-time feedback for immediate analysis.  
-- **Advantages**:  
-  - Industry standard for clinical gait analysis and biomechanics research.  
-  - Highly accurate for controlled laboratory settings.  
-  - Well-suited for studies requiring detailed data on joint angles and forces.  
-- **Limitations**:  
-  - Expensive and requires trained personnel to set up.  
-  - Restrictive for remote or non-specialized environments.  
+3. **Comparison Table Visualization**:  
+   - **"Key Features: OpenCap vs. Noraxon IMU"**  
+     Highlight the comparison graphically (e.g., bar charts or icons for cost, accuracy, mobility).  
 
----
+4. **Future Hybrid System Vision**:  
+   - **"Envisioning Hybrid Systems"**  
+     Depict a blend of markerless and marker-based systems, symbolizing the integration of technologies.  
 
-### **Comparison: OpenCap vs. Noraxon IMU**  
-| **Feature**           | **OpenCap (Markerless)**            | **Noraxon IMU (Marker-Based)**          |
-|------------------------|-------------------------------------|------------------------------------------|
-| **Cost**              | Low                                | High                                     |
-| **Setup Complexity**  | Minimal                            | Moderate to High                         |
-| **Accuracy**          | Moderate                           | High                                     |
-| **Mobility**          | Highly mobile                      | Requires lab or controlled environment   |
-| **Use Case**          | Remote physical therapy, sports    | Clinical gait analysis, biomechanics     |
-
----
-
-### **Applications in Medicine**
-- **OpenCap Use Cases**:  
-  - Remote physical therapy: Patients can perform exercises at home while clinicians monitor progress.  
-  - Sports medicine: Coaches analyze athletes' motion without requiring specialized labs.  
-  - Early mobility assessments: Quick evaluations in clinics or homes.  
-
-- **Noraxon IMU Use Cases**:  
-  - Clinical gait analysis: Detailed insights into walking patterns, useful for neurological or orthopedic conditions.  
-  - Rehabilitation monitoring: Tracks improvements in joint function after surgery.  
-  - High-precision biomechanics studies: Ideal for research requiring exact measurements of forces and angles.  
-
-- **Shared Use Cases**:  
-  - Rehabilitation progress tracking.  
-  - Identifying risk of injury through motion abnormalities.  
-
----
-
-### **Future Directions**
-- Combining **OpenCap’s accessibility** with **Noraxon’s precision** to create hybrid systems that balance affordability and accuracy.  
-- Enhancing AI in markerless systems for better accuracy, even in suboptimal conditions.  
-- Broader adoption of motion capture for personalized medicine, including tailoring rehabilitation programs based on individual motion profiles.  
-
----
-
-### **Design Notes for the Poster**  
-- Use a **chart or table** for the comparison.  
-- Include visuals such as:  
-  - OpenCap system setup (a patient with cameras around them).  
-  - Noraxon IMU sensors on a subject in a lab.  
-  - Example outputs (e.g., motion trajectories or gait analysis graphs).  
-
-Let me know if you'd like detailed wording for any specific section or assistance creating the visuals!
+Clear and concise titles will ensure your audience understands the context of each image and connects it to your content. Let me know if you'd like help creating or sourcing these visuals!
